@@ -1,0 +1,218 @@
+:root {
+    --happy-color: #FFD700;
+    --sad-color: #4682B4;
+    --energetic-color: #FF4500;
+    --calm-color: #98FB98;
+    --spotify-green: #1DB954;
+}
+
+body {
+    background-color: #f8f9fa;
+    transition: background-color 0.5s ease;
+    min-height: 100vh;
+}
+
+.mood-selector {
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.mood-buttons {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 1rem;
+    margin: 2rem 0;
+}
+
+.mood-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 1.5rem;
+    border: none;
+    border-radius: 12px;
+    background-color: white;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+}
+
+.mood-btn:hover {
+    transform: translateY(-5px);
+}
+
+.mood-btn i {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+}
+
+.mood-btn[data-mood="happy"] { color: var(--happy-color); }
+.mood-btn[data-mood="sad"] { color: var(--sad-color); }
+.mood-btn[data-mood="energetic"] { color: var(--energetic-color); }
+.mood-btn[data-mood="calm"] { color: var(--calm-color); }
+
+.playlist-container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 2rem;
+    background-color: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.song-item {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 1rem;
+    align-items: center;
+    padding: 1rem;
+    margin: 0.5rem 0;
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    transition: transform 0.2s ease;
+}
+
+.song-item:hover {
+    transform: scale(1.02);
+}
+
+.song-image {
+    width: 60px;
+    height: 60px;
+    overflow: hidden;
+    border-radius: 4px;
+}
+
+.song-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.song-info {
+    flex-grow: 1;
+}
+
+.song-title {
+    font-weight: bold;
+    margin-bottom: 0.25rem;
+}
+
+.song-artist {
+    color: #6c757d;
+    font-size: 0.9rem;
+}
+
+.song-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.preview-btn {
+    transition: all 0.3s ease;
+}
+
+.preview-btn.playing {
+    background-color: #dc3545;
+    color: white;
+    border-color: #dc3545;
+}
+
+.preview-btn.playing i::before {
+    content: "\f04c";
+}
+
+.saved-playlist-item {
+    transition: transform 0.2s ease;
+}
+
+.saved-playlist-item:hover {
+    transform: translateY(-2px);
+}
+
+.toast {
+    z-index: 1050;
+}
+
+.footer {
+    position: fixed;
+    bottom: 0;
+    width: 100%;
+    background-color: rgba(0, 0, 0, 0.3);  
+    color: rgba(255, 255, 255, 0.9);  
+    text-align: center;
+    padding: 15px;
+    font-size: 1.1em;
+    font-weight: 300;
+    letter-spacing: 1.5px;  
+    backdrop-filter: blur(8px);  
+    -webkit-backdrop-filter: blur(8px);  
+    border-top: 1px solid rgba(255, 255, 255, 0.1);  
+    z-index: 1000;
+    transition: all 0.3s ease;  
+}
+
+.footer:hover {
+    background-color: rgba(0, 0, 0, 0.4);  
+    color: rgba(255, 255, 255, 1);  
+}
+
+.footer p {
+    margin: 0;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+.social-link {
+    color: rgba(255, 255, 255, 0.9);
+    text-decoration: none;
+    font-size: 1.2em;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+}
+
+.social-link:hover {
+    color: #E1306C;  /* Instagram brand color */
+    transform: scale(1.2);
+}
+
+.social-link i {
+    margin-left: 5px;
+}
+
+.footer a {
+    color: #1DB954;
+    text-decoration: none;
+    transition: color 0.3s ease;
+}
+
+.footer a:hover {
+    color: #1ed760;
+}
+
+@media (max-width: 768px) {
+    .mood-buttons {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .song-item {
+        grid-template-columns: 1fr auto;
+    }
+
+    .song-image {
+        display: none;
+    }
+}
+
+@media (max-width: 480px) {
+    .mood-buttons {
+        grid-template-columns: 1fr;
+    }
+
+    .song-actions {
+        flex-direction: column;
+    }
+}
