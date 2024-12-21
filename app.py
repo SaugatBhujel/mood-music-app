@@ -44,6 +44,8 @@ def create_spotify():
 
 @app.route('/')
 def index():
+    if not session.get('token_info'):
+        return render_template('index.html', authenticated=False)
     try:
         sp = create_spotify()
         sp.current_user()
