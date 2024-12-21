@@ -7,6 +7,7 @@ from spotipy.oauth2 import SpotifyOAuth
 from dotenv import load_dotenv
 import logging
 import random
+from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG)
@@ -18,6 +19,22 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = os.urandom(24)
 app.config['SESSION_TYPE'] = 'filesystem'
 Session(app)
+
+# Initialize Flask-Login
+login_manager = LoginManager()
+login_manager.init_app(app)
+
+# User model
+class User(UserMixin):
+    def __init__(self, id):
+        self.id = id
+
+# In-memory user store (for demonstration)
+users = {'user@example.com': User(id='user@example.com')}
+
+@login_manager.user_loader
+def load_user(user_id):
+    return users.get(user_id)
 
 # Spotify Configuration
 SPOTIPY_CLIENT_ID = os.getenv('SPOTIFY_CLIENT_ID')
@@ -53,12 +70,39 @@ def index():
     except:
         return render_template('index.html', authenticated=False)
 
-@app.route('/login')
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        email = request.form['email']
+        # Here you would save the user to a database
+        users[email] = User(id=email)
+        login_user(users[email])
+        return redirect(url_for('profile'))
+    return render_template('register.html')
+
+@app.route('/login', methods=['GET', 'POST'])
 def login():
-    sp = create_spotify()
-    auth_url = sp.auth_manager.get_authorize_url()
-    logger.debug(f"Generated auth URL: {auth_url}")
-    return redirect(auth_url)
+    if request.method == 'POST':
+        email = request.form['email']
+        logger.debug(f"Login attempt for email: {email}")  # Log the email being processed
+        if email in users:
+            logger.debug(f"User found: {email}")  # Log if user is found
+            login_user(users[email])
+            return redirect(url_for('profile'))
+        else:
+            logger.warning(f"User not found: {email}")  # Log if user is not found
+    return render_template('login.html')
+
+@app.route('/profile')
+@login_required
+def profile():
+    return render_template('profile.html', user=current_user)
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for('index'))
 
 @app.route('/callback')
 def callback():
