@@ -45,25 +45,36 @@ SPOTIPY_REDIRECT_URI = os.getenv('SPOTIFY_REDIRECT_URI')
 mood_detector = MoodDetector()
 
 def create_spotify():
-    auth_manager = SpotifyOAuth(
-        client_id=SPOTIPY_CLIENT_ID,
-        client_secret=SPOTIPY_CLIENT_SECRET,
-        redirect_uri=SPOTIPY_REDIRECT_URI,
-        scope='playlist-modify-public playlist-modify-private user-read-private',
-        cache_handler=None
-    )
-    return spotipy.Spotify(auth_manager=auth_manager)
+    try:
+        auth_manager = SpotifyOAuth(
+            client_id=SPOTIPY_CLIENT_ID,
+            client_secret=SPOTIPY_CLIENT_SECRET,
+            redirect_uri=SPOTIPY_REDIRECT_URI,
+            scope='playlist-modify-public playlist-modify-private user-read-private',
+            cache_handler=None
+        )
+        return spotipy.Spotify(auth_manager=auth_manager)
+    except Exception as e:
+        logger.error(f"Error creating Spotify client: {str(e)}")
+        return None
 
 @app.route('/')
 def index():
-    if not session.get('token_info'):
-        return render_template('index.html', authenticated=False)
     try:
-        sp = spotipy.Spotify(auth=session['token_info']['access_token'])
-        sp.current_user()
-        return render_template('index.html', authenticated=True)
-    except:
-        return render_template('index.html', authenticated=False)
+        if not all([SPOTIPY_CLIENT_ID, SPOTIPY_CLIENT_SECRET, SPOTIPY_REDIRECT_URI]):
+            logger.error("Missing Spotify credentials")
+            return render_template('index.html', error="Spotify configuration is incomplete")
+        if not session.get('token_info'):
+            return render_template('index.html', authenticated=False)
+        try:
+            sp = spotipy.Spotify(auth=session['token_info']['access_token'])
+            sp.current_user()
+            return render_template('index.html', authenticated=True)
+        except:
+            return render_template('index.html', authenticated=False)
+    except Exception as e:
+        logger.error(f"Error in index route: {str(e)}")
+        return render_template('index.html', error="An unexpected error occurred")
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -300,5 +311,5 @@ def get_valence_for_mood(mood):
     return valence_levels.get(mood, 0.5)
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5001))
+    port = int(os.environ.get('PORT', 5002))
     app.run(host='0.0.0.0', port=port)

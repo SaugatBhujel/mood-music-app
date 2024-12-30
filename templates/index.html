@@ -3,189 +3,303 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mood Music</title>
+    <title>Mood Music - Your Personal Mood-Based Playlist Generator</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
     <style>
-        .mood-selector {
-            max-width: 800px;
-            margin: 0 auto;
+        :root {
+            --primary-color: #2ecc71;
+            --secondary-color: #3498db;
+            --accent-color: #e74c3c;
+            --background-dark: #1a1a2e;
+            --text-light: #ffffff;
+            --card-bg: rgba(255, 255, 255, 0.05);
+            --hover-bg: rgba(255, 255, 255, 0.1);
         }
-        .mood-buttons {
-            display: flex;
-            justify-content: center;
-            gap: 20px;
-            flex-wrap: wrap;
+
+        body {
+            background: linear-gradient(135deg, var(--background-dark), #16213e);
+            color: var(--text-light);
+            font-family: 'Poppins', sans-serif;
+            min-height: 100vh;
+            padding-bottom: 50px;
+            position: relative;
+            overflow-x: hidden;
         }
-        .mood-btn {
-            width: 120px;
-            height: 120px;
-            border: none;
-            border-radius: 10px;
-            background: #f8f9fa;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 50% 50%, rgba(46, 204, 113, 0.1), transparent 60%);
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        .container {
+            max-width: 1200px;
+            padding: 2rem;
+        }
+
+        .mood-section {
+            background: var(--card-bg);
+            border-radius: 20px;
+            padding: 2rem;
+            margin: 2rem 0;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            transform: translateY(0);
             transition: all 0.3s ease;
         }
-        .mood-btn:hover {
+
+        .mood-section:hover {
             transform: translateY(-5px);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-        }
-        .mood-btn i {
-            font-size: 2em;
-            margin-bottom: 10px;
-        }
-        .advanced-mood {
-            margin-top: 40px;
-            padding: 20px;
-            background: #f8f9fa;
-            border-radius: 10px;
-        }
-        .footer {
-            text-align: center;
-            padding: 20px;
-            margin-top: 40px;
-            background: #f8f9fa;
-        }
-        .track-list {
-            margin: 20px 0;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
         }
 
-        .track-item {
+        .mood-btn {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            border: none;
+            border-radius: 12px;
+            color: white;
+            padding: 1rem 2rem;
+            margin: 0.5rem;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .mood-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: 0.5s;
+        }
+
+        .mood-btn:hover::before {
+            left: 100%;
+        }
+
+        .mood-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(46, 204, 113, 0.3);
+        }
+
+        .track-card {
+            background: var(--card-bg);
+            border-radius: 15px;
+            padding: 1.5rem;
+            margin: 1rem 0;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: all 0.3s ease;
             display: flex;
             align-items: center;
-            padding: 10px;
-            border: 1px solid #ddd;
-            margin-bottom: 10px;
-            border-radius: 5px;
+            gap: 1rem;
         }
 
-        .track-checkbox {
-            margin-right: 15px;
+        .track-card:hover {
+            transform: scale(1.02);
+            background: var(--hover-bg);
+        }
+
+        .track-image {
+            width: 80px;
+            height: 80px;
+            border-radius: 10px;
+            object-fit: cover;
         }
 
         .track-info {
             flex-grow: 1;
-            margin-right: 15px;
         }
 
-        .hidden {
-            display: none;
+        .track-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: var(--text-light);
         }
 
-        audio {
-            max-width: 100%;
-            margin-top: 5px;
+        .track-artist {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 0.9rem;
+        }
+
+        .audio-preview {
+            width: 100%;
+            margin-top: 1rem;
+            border-radius: 8px;
+        }
+
+        .btn-action {
+            background: var(--accent-color);
+            border: none;
+            border-radius: 8px;
+            color: white;
+            padding: 0.5rem 1rem;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+        }
+
+        .btn-action:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(231, 76, 60, 0.3);
+        }
+
+        .animate-fade-in {
+            animation: fadeIn 0.5s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        #loadingSpinner {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 2rem;
+            border-radius: 15px;
+            z-index: 1000;
+        }
+
+        .alert {
+            border-radius: 12px;
+            padding: 1rem;
+            margin: 1rem 0;
+            border: none;
+            background: linear-gradient(135deg, rgba(46, 204, 113, 0.2), rgba(52, 152, 219, 0.2));
+            backdrop-filter: blur(5px);
+            color: var(--text-light);
+        }
+
+        .alert-danger {
+            background: linear-gradient(135deg, rgba(231, 76, 60, 0.2), rgba(192, 57, 43, 0.2));
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 3rem;
+            padding: 2rem 0;
+        }
+
+        .header h1 {
+            font-size: 3rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .header p {
+            font-size: 1.2rem;
+            color: rgba(255, 255, 255, 0.8);
+            max-width: 600px;
+            margin: 0 auto;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <div id="alertDiv" class="alert" style="display: none;"></div>
-        <div id="loadingSpinner" class="text-center" style="display: none;">
+        {% if error %}
+        <div class="alert alert-danger animate-fade-in" role="alert">
+            {{ error }}
+        </div>
+        {% endif %}
+        
+        <div class="header animate-fade-in">
+            <h1>Mood Music</h1>
+            <p>Let your emotions guide your musical journey. Select a mood and discover personalized playlists that match your feelings.</p>
+        </div>
+
+        <div id="alertDiv" class="alert animate-fade-in" style="display: none;"></div>
+        
+        <div id="loadingSpinner" class="text-center animate-fade-in" style="display: none;">
             <div class="spinner-border text-primary" role="status">
                 <span class="visually-hidden">Loading...</span>
             </div>
         </div>
-        <header class="text-center py-5">
-            <h1 class="display-4">Mood Music</h1>
-            <p class="lead">Generate playlists that match your mood</p>
-            {% if not authenticated %}
-            <a href="{{ url_for('spotify_login') }}" class="btn btn-success btn-lg">
-                <i class="fab fa-spotify"></i> Connect with Spotify
-            </a>
-            {% endif %}
-        </header>
 
-        {% if authenticated %}
-        <div class="mood-selector">
-            <h2 class="text-center mb-4">Quick Mood Selection</h2>
-            <div class="mood-buttons">
-                <button class="mood-btn" data-mood="happy">
-                    <i class="fas fa-smile"></i>
-                    <span>Happy</span>
+        <div class="mood-section animate-fade-in">
+            <h2 class="text-center mb-4">How are you feeling today?</h2>
+            <div class="d-flex flex-wrap justify-content-center gap-3">
+                <button class="mood-btn" onclick="handleQuickMood('happy')">
+                    <i class="fas fa-smile"></i> Happy
                 </button>
-                <button class="mood-btn" data-mood="sad">
-                    <i class="fas fa-frown"></i>
-                    <span>Sad</span>
+                <button class="mood-btn" onclick="handleQuickMood('sad')">
+                    <i class="fas fa-frown"></i> Sad
                 </button>
-                <button class="mood-btn" data-mood="energetic">
-                    <i class="fas fa-bolt"></i>
-                    <span>Energetic</span>
+                <button class="mood-btn" onclick="handleQuickMood('energetic')">
+                    <i class="fas fa-bolt"></i> Energetic
                 </button>
-                <button class="mood-btn" data-mood="calm">
-                    <i class="fas fa-peace"></i>
-                    <span>Calm</span>
+                <button class="mood-btn" onclick="handleQuickMood('calm')">
+                    <i class="fas fa-peace"></i> Calm
                 </button>
-            </div>
-
-            <!-- Advanced Mood Detection Section -->
-            <div class="advanced-mood">
-                <h3 class="text-center mb-4">Advanced Mood Detection</h3>
-                <div class="row justify-content-center">
-                    <div class="col-md-8">
-                        <div class="card">
-                            <div class="card-body">
-                                <h5 class="card-title">Tell us more about your mood</h5>
-                                <div class="form-group mb-3">
-                                    <input type="text" id="moodText" class="form-control" 
-                                           placeholder="Describe how you're feeling...">
-                                </div>
-                                <div class="form-group mb-3">
-                                    <input type="text" id="cityInput" class="form-control" 
-                                           placeholder="Enter your city (optional)">
-                                </div>
-                                <div id="suggestedMoods" class="mb-3" style="display: none;">
-                                    <h6>Suggested Moods:</h6>
-                                    <div class="d-flex flex-wrap" id="moodTags"></div>
-                                </div>
-                                <form id="advancedMoodForm">
-                                    <button class="btn btn-primary">
-                                        Generate Smart Playlist
-                                    </button>
-                                </form>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div id="recommendationsSection" class="hidden">
-                <h3>Recommended Songs</h3>
-                <div id="trackList" class="track-list">
-                    <!-- Tracks will be added here -->
-                </div>
-                <button id="createPlaylistBtn" class="btn btn-primary" disabled>Create Playlist with Selected Songs</button>
-            </div>
-
-            <div id="playlistResult" class="mt-4" style="display: none;">
-                <div class="card">
-                    <div class="card-body text-center">
-                        <h5 class="card-title">Your Playlist is Ready!</h5>
-                        <p class="card-text">We've created a playlist based on your mood and current conditions.</p>
-                        <a href="#" id="playlistLink" class="btn btn-success" target="_blank">
-                            Open in Spotify
-                        </a>
-                    </div>
-                </div>
+                <button class="mood-btn" onclick="handleQuickMood('romantic')">
+                    <i class="fas fa-heart"></i> Romantic
+                </button>
             </div>
         </div>
-        {% endif %}
-    </div>
 
-    <footer class="footer">
-        <p>Created with <i class="fas fa-heart"></i> by Mood Music Team</p>
-    </footer>
+        <div id="recommendationsSection" class="animate-fade-in" style="display: none;">
+            <h3 class="text-center mb-4">Your Personalized Playlist</h3>
+            <div id="trackList" class="track-list"></div>
+        </div>
+
+        <div id="playlistSection" class="mood-section animate-fade-in" style="display: none;">
+            <h3 class="text-center mb-4">Create Playlist</h3>
+            <div class="text-center">
+                <input type="text" id="playlistName" class="form-control mb-3" placeholder="Enter playlist name">
+                <button class="btn-action" onclick="createPlaylist()">
+                    <i class="fas fa-plus"></i> Create Playlist
+                </button>
+            </div>
+        </div>
+    </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         let currentMood = '';
-
-        // Debug logging
         console.log('Script loaded');
+
+        function createTrackElement(track) {
+            const div = document.createElement('div');
+            div.className = 'track-card animate-fade-in';
+            div.innerHTML = `
+                <img src="${track.album.images[0].url}" alt="${track.name}" class="track-image">
+                <div class="track-info">
+                    <h4 class="track-title">${track.name}</h4>
+                    <p class="track-artist">${track.artists[0].name}</p>
+                    ${track.preview_url ? `
+                        <audio class="audio-preview" controls>
+                            <source src="${track.preview_url}" type="audio/mpeg">
+                        </audio>
+                    ` : '<p class="text-muted">No preview available</p>'}
+                </div>
+                <div>
+                    <button class="btn-action" onclick="addToPlaylist('${track.id}')">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                </div>
+            `;
+            return div;
+        }
 
         async function handleQuickMood(mood) {
             console.log('Quick mood selected:', mood);
@@ -259,108 +373,16 @@
             const trackList = document.getElementById('trackList');
             trackList.innerHTML = '';
             
-            tracks.forEach(track => {
-                const trackDiv = document.createElement('div');
-                trackDiv.className = 'track-item';
-                trackDiv.innerHTML = `
-                    <input type="checkbox" value="${track.uri}" class="track-checkbox">
-                    <div class="track-info">
-                        <strong>${track.name}</strong> by ${track.artist}
-                        <br>
-                        Album: ${track.album}
-                        ${track.preview_url ? `
-                            <br>
-                            <audio controls>
-                                <source src="${track.preview_url}" type="audio/mpeg">
-                            </audio>
-                        ` : ''}
-                    </div>
-                    <a href="${track.external_url}" target="_blank" class="btn btn-sm btn-outline-secondary">
-                        Open in Spotify
-                    </a>
-                `;
-                trackList.appendChild(trackDiv);
+            tracks.forEach((track, index) => {
+                const trackElement = createTrackElement(track);
+                setTimeout(() => {
+                    trackList.appendChild(trackElement);
+                }, index * 100); // Stagger the animation
             });
             
-            document.getElementById('recommendationsSection').classList.remove('hidden');
+            document.getElementById('recommendationsSection').style.display = 'block';
             updateCreatePlaylistButton();
         }
-
-        function updateCreatePlaylistButton() {
-            const selectedTracks = Array.from(document.querySelectorAll('.track-checkbox:checked')).map(cb => cb.value);
-            const createPlaylistBtn = document.getElementById('createPlaylistBtn');
-            createPlaylistBtn.disabled = selectedTracks.length === 0;
-        }
-
-        async function createPlaylist() {
-            const selectedTracks = Array.from(document.querySelectorAll('.track-checkbox:checked')).map(cb => cb.value);
-            if (selectedTracks.length === 0) {
-                showError('Please select at least one track');
-                return;
-            }
-            
-            try {
-                showLoading();
-                const response = await fetch('/api/create-playlist', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        tracks: selectedTracks,
-                        mood: currentMood
-                    })
-                });
-                
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error || 'Failed to create playlist');
-                }
-                
-                const data = await response.json();
-                showSuccess(`Playlist created! <a href="${data.playlist_url}" target="_blank">Open in Spotify</a>`);
-                document.getElementById('recommendationsSection').classList.add('hidden');
-            } catch (error) {
-                console.error('Error:', error);
-                showError('Failed to create playlist. Please try again.');
-            } finally {
-                hideLoading();
-            }
-        }
-
-        // Add event listeners
-        document.addEventListener('DOMContentLoaded', () => {
-            console.log('DOM loaded');
-            // Quick mood buttons
-            const moodButtons = document.querySelectorAll('.mood-btn');
-            console.log('Found mood buttons:', moodButtons.length);
-            
-            moodButtons.forEach(button => {
-                const mood = button.getAttribute('data-mood');
-                console.log('Setting up button for mood:', mood);
-                button.addEventListener('click', () => {
-                    console.log('Button clicked:', mood);
-                    handleQuickMood(mood);
-                });
-            });
-
-            // Advanced mood form
-            const advancedForm = document.getElementById('advancedMoodForm');
-            if (advancedForm) {
-                advancedForm.addEventListener('submit', handleAdvancedMood);
-            }
-
-            // Track selection
-            const trackList = document.getElementById('trackList');
-            if (trackList) {
-                trackList.addEventListener('change', updateCreatePlaylistButton);
-            }
-            
-            const createPlaylistBtn = document.getElementById('createPlaylistBtn');
-            if (createPlaylistBtn) {
-                createPlaylistBtn.addEventListener('click', createPlaylist);
-            }
-        });
 
         function showLoading() {
             const spinner = document.getElementById('loadingSpinner');
@@ -376,7 +398,7 @@
             console.error('Error:', message);
             const alertDiv = document.getElementById('alertDiv');
             if (alertDiv) {
-                alertDiv.className = 'alert alert-danger';
+                alertDiv.className = 'alert alert-danger animate-fade-in';
                 alertDiv.innerHTML = message;
                 alertDiv.style.display = 'block';
             }
@@ -385,7 +407,7 @@
         function showSuccess(message) {
             const alertDiv = document.getElementById('alertDiv');
             if (alertDiv) {
-                alertDiv.className = 'alert alert-success';
+                alertDiv.className = 'alert alert-success animate-fade-in';
                 alertDiv.innerHTML = message;
                 alertDiv.style.display = 'block';
             }
