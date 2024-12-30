@@ -123,8 +123,8 @@ def callback():
         logger.error(f"Error in callback: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/generate-playlist', methods=['POST'])
-def generate_playlist():
+@app.route('/api/get-recommendations', methods=['POST'])
+def get_recommendations():
     try:
         if 'token_info' not in session:
             return jsonify({'error': 'Not authenticated with Spotify'}), 401
@@ -141,18 +141,13 @@ def generate_playlist():
         sp = spotipy.Spotify(auth=session['token_info']['access_token'])
         
         try:
-            # First, get available genres
-            available_genres = sp.recommendation_genre_seeds()
-            logger.debug(f"Available genres: {available_genres}")
-            
             # Get track recommendations based on search
             results = sp.search(q=f"genre:{primary_mood.lower()}", type='track', limit=5)
             if not results['tracks']['items']:
                 results = sp.search(q='genre:pop', type='track', limit=5)
             
-            # Use track IDs as seeds instead of genres
+            # Use track IDs as seeds
             seed_tracks = [track['id'] for track in results['tracks']['items'][:5]]
-            logger.debug(f"Using seed tracks: {seed_tracks}")
             
             # Get recommendations using track seeds
             recommendations = sp.recommendations(
@@ -171,59 +166,60 @@ def generate_playlist():
                 limit=20
             )
             recommendations = {'tracks': results['tracks']['items']}
-        
-        # Create playlist
-        playlist_name = f"{primary_mood} Mood - {datetime.now().strftime('%Y-%m-%d')}"
-        user_id = sp.current_user()['id']
-        playlist = sp.user_playlist_create(user_id, playlist_name, public=False)
-        
-        # Add tracks to playlist
-        if recommendations and recommendations['tracks']:
-            track_uris = [track['uri'] for track in recommendations['tracks']]
-            if track_uris:
-                sp.playlist_add_items(playlist['id'], track_uris)
+
+        # Format track information for frontend
+        tracks = []
+        for track in recommendations['tracks']:
+            tracks.append({
+                'id': track['id'],
+                'name': track['name'],
+                'artist': track['artists'][0]['name'],
+                'album': track['album']['name'],
+                'uri': track['uri'],
+                'preview_url': track['preview_url'],
+                'external_url': track['external_urls']['spotify']
+            })
         
         return jsonify({
-            'playlist_id': playlist['id'],
-            'playlist_url': playlist['external_urls']['spotify'],
+            'tracks': tracks,
             'suggested_moods': suggested_moods
         })
         
     except Exception as e:
-        logger.error(f"Error generating playlist: {str(e)}")
+        logger.error(f"Error getting recommendations: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-def get_energy_for_mood(mood):
-    """Map moods to energy levels (0.0 to 1.0)"""
-    energy_levels = {
-        'Happy': 0.8,
-        'Energetic': 0.9,
-        'Peaceful': 0.3,
-        'Melancholic': 0.4,
-        'Relaxed': 0.3,
-        'Focused': 0.5,
-        'Mellow': 0.4,
-        'Romantic': 0.5,
-        'Night': 0.2,
-        'Morning': 0.7
-    }
-    return energy_levels.get(mood, 0.5)
+@app.route('/api/create-playlist', methods=['POST'])
+def create_playlist():
+    try:
+        if 'token_info' not in session:
+            return jsonify({'error': 'Not authenticated with Spotify'}), 401
 
-def get_valence_for_mood(mood):
-    """Map moods to valence/positivity levels (0.0 to 1.0)"""
-    valence_levels = {
-        'Happy': 0.8,
-        'Energetic': 0.7,
-        'Peaceful': 0.6,
-        'Melancholic': 0.3,
-        'Relaxed': 0.5,
-        'Focused': 0.6,
-        'Mellow': 0.5,
-        'Romantic': 0.6,
-        'Night': 0.4,
-        'Morning': 0.7
-    }
-    return valence_levels.get(mood, 0.5)
+        data = request.get_json()
+        selected_tracks = data.get('tracks', [])
+        mood = data.get('mood', 'Custom')
+        
+        if not selected_tracks:
+            return jsonify({'error': 'No tracks selected'}), 400
+        
+        sp = spotipy.Spotify(auth=session['token_info']['access_token'])
+        
+        # Create playlist
+        playlist_name = f"{mood} Mood - {datetime.now().strftime('%Y-%m-%d')}"
+        user_id = sp.current_user()['id']
+        playlist = sp.user_playlist_create(user_id, playlist_name, public=False)
+        
+        # Add selected tracks to playlist
+        sp.playlist_add_items(playlist['id'], selected_tracks)
+        
+        return jsonify({
+            'playlist_id': playlist['id'],
+            'playlist_url': playlist['external_urls']['spotify']
+        })
+        
+    except Exception as e:
+        logger.error(f"Error creating playlist: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/save-playlist', methods=['POST'])
 def save_playlist():
@@ -270,6 +266,38 @@ def save_playlist():
 @app.route('/api/saved-playlists')
 def get_saved_playlists():
     return jsonify(session.get('playlists', []))
+
+def get_energy_for_mood(mood):
+    """Map moods to energy levels (0.0 to 1.0)"""
+    energy_levels = {
+        'Happy': 0.8,
+        'Energetic': 0.9,
+        'Peaceful': 0.3,
+        'Melancholic': 0.4,
+        'Relaxed': 0.3,
+        'Focused': 0.5,
+        'Mellow': 0.4,
+        'Romantic': 0.5,
+        'Night': 0.2,
+        'Morning': 0.7
+    }
+    return energy_levels.get(mood, 0.5)
+
+def get_valence_for_mood(mood):
+    """Map moods to valence/positivity levels (0.0 to 1.0)"""
+    valence_levels = {
+        'Happy': 0.8,
+        'Energetic': 0.7,
+        'Peaceful': 0.6,
+        'Melancholic': 0.3,
+        'Relaxed': 0.5,
+        'Focused': 0.6,
+        'Mellow': 0.5,
+        'Romantic': 0.6,
+        'Night': 0.4,
+        'Morning': 0.7
+    }
+    return valence_levels.get(mood, 0.5)
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5001))

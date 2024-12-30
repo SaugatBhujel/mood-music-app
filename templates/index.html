@@ -50,6 +50,36 @@
             margin-top: 40px;
             background: #f8f9fa;
         }
+        .track-list {
+            margin: 20px 0;
+        }
+
+        .track-item {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            border: 1px solid #ddd;
+            margin-bottom: 10px;
+            border-radius: 5px;
+        }
+
+        .track-checkbox {
+            margin-right: 15px;
+        }
+
+        .track-info {
+            flex-grow: 1;
+            margin-right: 15px;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        audio {
+            max-width: 100%;
+            margin-top: 5px;
+        }
     </style>
 </head>
 <body>
@@ -115,6 +145,14 @@
                 </div>
             </div>
 
+            <div id="recommendationsSection" class="hidden">
+                <h3>Recommended Songs</h3>
+                <div id="trackList" class="track-list">
+                    <!-- Tracks will be added here -->
+                </div>
+                <button id="createPlaylistBtn" class="btn btn-primary" disabled>Create Playlist with Selected Songs</button>
+            </div>
+
             <div id="playlistResult" class="mt-4" style="display: none;">
                 <div class="card">
                     <div class="card-body text-center">
@@ -173,6 +211,93 @@
             }
         }
 
+        async function handleMoodSelection(mood) {
+            try {
+                const response = await fetch('/api/get-recommendations', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ mood: mood })
+                });
+                
+                if (!response.ok) throw new Error('Failed to get recommendations');
+                
+                const data = await response.json();
+                displayRecommendations(data.tracks);
+            } catch (error) {
+                console.error('Error:', error);
+                showError('Failed to get recommendations. Please try again.');
+            }
+        }
+
+        function displayRecommendations(tracks) {
+            const trackList = document.getElementById('trackList');
+            trackList.innerHTML = '';
+            
+            tracks.forEach(track => {
+                const trackDiv = document.createElement('div');
+                trackDiv.className = 'track-item';
+                trackDiv.innerHTML = `
+                    <input type="checkbox" value="${track.uri}" class="track-checkbox">
+                    <div class="track-info">
+                        <strong>${track.name}</strong> by ${track.artist}
+                        <br>
+                        Album: ${track.album}
+                        ${track.preview_url ? `
+                            <br>
+                            <audio controls>
+                                <source src="${track.preview_url}" type="audio/mpeg">
+                            </audio>
+                        ` : ''}
+                    </div>
+                    <a href="${track.external_url}" target="_blank" class="btn btn-sm btn-outline-secondary">
+                        Open in Spotify
+                    </a>
+                `;
+                trackList.appendChild(trackDiv);
+            });
+            
+            document.getElementById('recommendationsSection').classList.remove('hidden');
+            updateCreatePlaylistButton();
+        }
+
+        function updateCreatePlaylistButton() {
+            const selectedTracks = Array.from(document.querySelectorAll('.track-checkbox:checked')).map(cb => cb.value);
+            const createPlaylistBtn = document.getElementById('createPlaylistBtn');
+            createPlaylistBtn.disabled = selectedTracks.length === 0;
+        }
+
+        async function createPlaylist() {
+            const selectedTracks = Array.from(document.querySelectorAll('.track-checkbox:checked')).map(cb => cb.value);
+            if (selectedTracks.length === 0) {
+                showError('Please select at least one track');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/create-playlist', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        tracks: selectedTracks,
+                        mood: currentMood
+                    })
+                });
+                
+                if (!response.ok) throw new Error('Failed to create playlist');
+                
+                const data = await response.json();
+                showSuccess(`Playlist created! <a href="${data.playlist_url}" target="_blank">Open in Spotify</a>`);
+                document.getElementById('recommendationsSection').classList.add('hidden');
+            } catch (error) {
+                console.error('Error:', error);
+                showError('Failed to create playlist. Please try again.');
+            }
+        }
+
         async function handlePlaylistResponse(response) {
             const data = await response.json();
             
@@ -197,6 +322,12 @@
             document.getElementById('playlistLink').href = data.playlist_url;
             document.getElementById('playlistResult').style.display = 'block';
         }
+
+        // Add event listeners
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('trackList').addEventListener('change', updateCreatePlaylistButton);
+            document.getElementById('createPlaylistBtn').addEventListener('click', createPlaylist);
+        });
     </script>
 </body>
 </html>
