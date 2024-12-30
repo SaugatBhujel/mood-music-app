@@ -78,6 +78,12 @@
                 
                 const data = await response.json();
                 
+                if (response.status === 401) {
+                    // Redirect to Spotify login if not authenticated
+                    window.location.href = "{{ url_for('spotify_login') }}";
+                    return;
+                }
+                
                 if (data.error) {
                     alert('Error: ' + data.error);
                     return;
@@ -95,7 +101,8 @@
                 document.getElementById('playlistResult').style.display = 'block';
                 
             } catch (error) {
-                alert('Error generating playlist: ' + error.message);
+                console.error('Error:', error);
+                alert('Error generating playlist. Please try again.');
             }
         }
     </script>

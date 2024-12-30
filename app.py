@@ -49,8 +49,8 @@ def create_spotify():
         client_id=SPOTIPY_CLIENT_ID,
         client_secret=SPOTIPY_CLIENT_SECRET,
         redirect_uri=SPOTIPY_REDIRECT_URI,
-        scope='user-library-read playlist-modify-public user-read-private',
-        cache_path=None
+        scope='playlist-modify-public playlist-modify-private user-read-private',
+        cache_handler=None
     )
     return spotipy.Spotify(auth_manager=auth_manager)
 
@@ -59,7 +59,7 @@ def index():
     if not session.get('token_info'):
         return render_template('index.html', authenticated=False)
     try:
-        sp = create_spotify()
+        sp = spotipy.Spotify(auth=session['token_info']['access_token'])
         sp.current_user()
         return render_template('index.html', authenticated=True)
     except:
@@ -118,7 +118,7 @@ def callback():
         token_info = sp.auth_manager.get_access_token(code)
         session['token_info'] = token_info
         logger.debug("Successfully got token info")
-        return redirect('/')
+        return redirect(url_for('index'))
     except Exception as e:
         logger.error(f"Error in callback: {str(e)}")
         return jsonify({'error': str(e)}), 500
@@ -126,21 +126,37 @@ def callback():
 @app.route('/api/generate-playlist', methods=['POST'])
 def generate_playlist():
     try:
+        if 'token_info' not in session:
+            return jsonify({'error': 'Not authenticated with Spotify'}), 401
+
         data = request.get_json()
         mood = data.get('mood', '')
         city = data.get('city', None)
         
         # Get enhanced mood suggestions
         suggested_moods = mood_detector.combine_moods(mood, city)
-        
-        # Use the first mood for playlist generation
         primary_mood = suggested_moods[0]
         
-        sp = create_spotify()
+        # Create Spotify client with stored token
+        sp = spotipy.Spotify(auth=session['token_info']['access_token'])
+        
+        # Get available genres first
+        available_genres = sp.recommendation_genres()['genres']
+        
+        # Filter our genre suggestions to only include available ones
+        suggested_genres = get_genres_for_mood(primary_mood)
+        valid_genres = [genre for genre in suggested_genres if genre in available_genres]
+        
+        # If no valid genres found, use some safe defaults
+        if not valid_genres:
+            valid_genres = ['pop', 'rock']
+        
+        # Limit to 5 genres as that's the maximum allowed
+        valid_genres = valid_genres[:5]
         
         # Get recommendations based on mood
         recommendations = sp.recommendations(
-            seed_genres=get_genres_for_mood(primary_mood),
+            seed_genres=valid_genres,
             limit=20,
             target_energy=get_energy_for_mood(primary_mood),
             target_valence=get_valence_for_mood(primary_mood)
