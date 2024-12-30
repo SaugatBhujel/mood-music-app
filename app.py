@@ -140,28 +140,28 @@ def generate_playlist():
         # Create Spotify client with stored token
         sp = spotipy.Spotify(auth=session['token_info']['access_token'])
         
-        # Get available genres first
-        genres = sp.recommendation_genre_seeds()
-        available_genres = genres['genres']
-        
-        # Filter our genre suggestions to only include available ones
-        suggested_genres = get_genres_for_mood(primary_mood)
-        valid_genres = [genre for genre in suggested_genres if genre in available_genres]
-        
-        # If no valid genres found, use some safe defaults
-        if not valid_genres:
-            valid_genres = ['pop', 'indie-pop', 'rock']
-        
-        # Limit to 5 genres as that's the maximum allowed
-        valid_genres = valid_genres[:5]
-        
         # Get recommendations based on mood
-        recommendations = sp.recommendations(
-            seed_genres=valid_genres,
-            limit=20,
-            target_energy=get_energy_for_mood(primary_mood),
-            target_valence=get_valence_for_mood(primary_mood)
-        )
+        seed_genres = get_genres_for_mood(primary_mood)[:5]  # Limit to 5 genres
+        
+        logger.debug(f"Using seed genres: {seed_genres}")
+        
+        try:
+            recommendations = sp.recommendations(
+                seed_genres=seed_genres,
+                limit=20,
+                target_energy=get_energy_for_mood(primary_mood),
+                target_valence=get_valence_for_mood(primary_mood)
+            )
+        except Exception as e:
+            logger.error(f"Error getting recommendations: {str(e)}")
+            # Fallback to simpler genres if the first attempt fails
+            fallback_genres = ['pop', 'rock']
+            recommendations = sp.recommendations(
+                seed_genres=fallback_genres,
+                limit=20,
+                target_energy=0.5,
+                target_valence=0.5
+            )
         
         # Create playlist
         tracks = [track['uri'] for track in recommendations['tracks']]
@@ -187,17 +187,17 @@ def get_genres_for_mood(mood):
     """Map moods to appropriate genres"""
     mood_genres = {
         'Happy': ['pop', 'dance', 'disco'],
-        'Energetic': ['electronic', 'dance', 'house'],
-        'Peaceful': ['ambient', 'classical', 'piano'],
+        'Energetic': ['dance', 'electronic', 'house'],
+        'Peaceful': ['classical', 'ambient', 'study'],
         'Melancholic': ['indie', 'acoustic', 'piano'],
-        'Relaxed': ['ambient', 'jazz', 'acoustic'],
-        'Focused': ['classical', 'electronic', 'ambient'],
-        'Mellow': ['indie-pop', 'folk', 'acoustic'],
+        'Relaxed': ['jazz', 'acoustic', 'ambient'],
+        'Focused': ['classical', 'electronic', 'study'],
+        'Mellow': ['indie', 'folk', 'acoustic'],
         'Romantic': ['jazz', 'soul', 'r-n-b'],
-        'Night': ['ambient', 'chill', 'electronic'],
-        'Morning': ['pop', 'indie-pop', 'dance']
+        'Night': ['chill', 'electronic', 'study'],
+        'Morning': ['pop', 'indie', 'dance']
     }
-    return mood_genres.get(mood, ['pop', 'indie-pop', 'rock'])
+    return mood_genres.get(mood, ['pop', 'rock'])
 
 def get_energy_for_mood(mood):
     """Map moods to energy levels (0.0 to 1.0)"""
