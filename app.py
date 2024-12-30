@@ -6,8 +6,8 @@ import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 from dotenv import load_dotenv
 import logging
-import random
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+from mood_detector import MoodDetector
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG)
@@ -42,13 +42,7 @@ SPOTIPY_CLIENT_ID = os.getenv('SPOTIFY_CLIENT_ID')
 SPOTIPY_CLIENT_SECRET = os.getenv('SPOTIFY_CLIENT_SECRET')
 SPOTIPY_REDIRECT_URI = os.getenv('SPOTIFY_REDIRECT_URI')
 
-# Simple mood configurations for speed
-MOOD_CONFIGS = {
-    'happy': 'genre:pop mood:happy',
-    'sad': 'genre:ballad',  # Simplified to just ballads which are typically sad
-    'energetic': 'genre:dance mood:party',
-    'calm': 'genre:ambient mood:peaceful'
-}
+mood_detector = MoodDetector()
 
 def create_spotify():
     auth_manager = SpotifyOAuth(
@@ -132,43 +126,93 @@ def callback():
 @app.route('/api/generate-playlist', methods=['POST'])
 def generate_playlist():
     try:
+        data = request.get_json()
+        mood = data.get('mood', '')
+        city = data.get('city', None)
+        
+        # Get enhanced mood suggestions
+        suggested_moods = mood_detector.combine_moods(mood, city)
+        
+        # Use the first mood for playlist generation
+        primary_mood = suggested_moods[0]
+        
         sp = create_spotify()
-        mood = request.json.get('mood', 'happy')
         
-        if mood not in MOOD_CONFIGS:
-            return jsonify({'error': 'Invalid mood'}), 400
-            
-        search_query = MOOD_CONFIGS[mood]
-        offset = random.randint(0, 20)  # Small offset for speed
-        
-        results = sp.search(
-            q=search_query,
-            type='track',
-            limit=10,  # Just get what we need
-            offset=offset
+        # Get recommendations based on mood
+        recommendations = sp.recommendations(
+            seed_genres=get_genres_for_mood(primary_mood),
+            limit=20,
+            target_energy=get_energy_for_mood(primary_mood),
+            target_valence=get_valence_for_mood(primary_mood)
         )
         
-        if not results or 'tracks' not in results or not results['tracks']['items']:
-            return jsonify({'error': 'No tracks found'}), 404
-            
-        tracks = results['tracks']['items']
-        random.shuffle(tracks)  # Shuffle for variety
+        # Create playlist
+        tracks = [track['uri'] for track in recommendations['tracks']]
+        playlist_name = f"{primary_mood} Mood - {datetime.now().strftime('%Y-%m-%d')}"
         
-        playlist = {
-            'mood': mood,
-            'songs': [{
-                'title': track['name'],
-                'artist': track['artists'][0]['name'],
-                'link': track['external_urls']['spotify'],
-                'preview_url': track['preview_url'],
-                'image': track['album']['images'][0]['url'] if track['album']['images'] else None
-            } for track in tracks]
-        }
+        user_id = sp.current_user()['id']
+        playlist = sp.user_playlist_create(user_id, playlist_name, public=False)
         
-        return jsonify(playlist)
+        if tracks:
+            sp.playlist_add_items(playlist['id'], tracks)
+        
+        return jsonify({
+            'playlist_id': playlist['id'],
+            'playlist_url': playlist['external_urls']['spotify'],
+            'suggested_moods': suggested_moods
+        })
         
     except Exception as e:
+        logger.error(f"Error generating playlist: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+def get_genres_for_mood(mood):
+    """Map moods to appropriate genres"""
+    mood_genres = {
+        'Happy': ['pop', 'dance', 'happy'],
+        'Energetic': ['dance', 'electronic', 'power-pop'],
+        'Peaceful': ['ambient', 'classical', 'sleep'],
+        'Melancholic': ['sad', 'indie', 'piano'],
+        'Relaxed': ['chill', 'ambient', 'jazz'],
+        'Focused': ['focus', 'study', 'classical'],
+        'Mellow': ['chill', 'indie', 'folk'],
+        'Romantic': ['romance', 'jazz', 'r-n-b'],
+        'Night': ['sleep', 'ambient', 'chill'],
+        'Morning': ['pop', 'happy', 'dance']
+    }
+    return mood_genres.get(mood, ['pop', 'rock', 'indie'])
+
+def get_energy_for_mood(mood):
+    """Map moods to energy levels (0.0 to 1.0)"""
+    energy_levels = {
+        'Happy': 0.8,
+        'Energetic': 0.9,
+        'Peaceful': 0.3,
+        'Melancholic': 0.4,
+        'Relaxed': 0.3,
+        'Focused': 0.5,
+        'Mellow': 0.4,
+        'Romantic': 0.5,
+        'Night': 0.2,
+        'Morning': 0.7
+    }
+    return energy_levels.get(mood, 0.6)
+
+def get_valence_for_mood(mood):
+    """Map moods to valence/positivity levels (0.0 to 1.0)"""
+    valence_levels = {
+        'Happy': 0.8,
+        'Energetic': 0.7,
+        'Peaceful': 0.6,
+        'Melancholic': 0.3,
+        'Relaxed': 0.5,
+        'Focused': 0.6,
+        'Mellow': 0.5,
+        'Romantic': 0.6,
+        'Night': 0.4,
+        'Morning': 0.7
+    }
+    return valence_levels.get(mood, 0.5)
 
 @app.route('/api/save-playlist', methods=['POST'])
 def save_playlist():

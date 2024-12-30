@@ -10,56 +10,47 @@
 </head>
 <body>
     <div class="container">
-        <header class="text-center py-5">
+        <div class="text-center my-5">
             <h1 class="display-4">Mood Music</h1>
             <p class="lead">Generate playlists that match your mood</p>
             {% if not authenticated %}
             <a href="{{ url_for('spotify_login') }}" class="btn btn-success btn-lg">
                 <i class="fab fa-spotify"></i> Connect with Spotify
             </a>
+            {% else %}
+            <div class="row justify-content-center">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">How are you feeling?</h5>
+                            <div class="form-group mb-3">
+                                <input type="text" id="moodInput" class="form-control" placeholder="Describe your mood...">
+                            </div>
+                            <div class="form-group mb-3">
+                                <input type="text" id="cityInput" class="form-control" placeholder="Enter your city (optional)">
+                            </div>
+                            <div id="suggestedMoods" class="mb-3" style="display: none;">
+                                <h6>Suggested Moods:</h6>
+                                <div class="d-flex flex-wrap" id="moodTags"></div>
+                            </div>
+                            <button onclick="generatePlaylist()" class="btn btn-primary">Generate Playlist</button>
+                        </div>
+                    </div>
+                    <div id="playlistResult" class="mt-4" style="display: none;">
+                        <div class="card">
+                            <div class="card-body">
+                                <h5 class="card-title">Your Playlist is Ready!</h5>
+                                <p class="card-text">We've created a playlist based on your mood and current conditions.</p>
+                                <a href="#" id="playlistLink" class="btn btn-success" target="_blank">
+                                    Open in Spotify
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
             {% endif %}
-        </header>
-
-        {% if authenticated %}
-        <div class="mood-selector">
-            <h2 class="text-center mb-4">How are you feeling today?</h2>
-            <div class="mood-buttons">
-                <button class="mood-btn" data-mood="happy">
-                    <i class="fas fa-smile"></i>
-                    <span>Happy</span>
-                </button>
-                <button class="mood-btn" data-mood="sad">
-                    <i class="fas fa-frown"></i>
-                    <span>Sad</span>
-                </button>
-                <button class="mood-btn" data-mood="energetic">
-                    <i class="fas fa-bolt"></i>
-                    <span>Energetic</span>
-                </button>
-                <button class="mood-btn" data-mood="calm">
-                    <i class="fas fa-peace"></i>
-                    <span>Calm</span>
-                </button>
-            </div>
         </div>
-
-        <div class="playlist-container mt-5" style="display: none;">
-            <h3 class="text-center mb-4">Your Mood Playlist</h3>
-            <div class="playlist-content">
-                <!-- Playlist will be populated here -->
-            </div>
-            <button class="btn btn-primary save-playlist mt-3">
-                <i class="fas fa-save"></i> Save Playlist
-            </button>
-        </div>
-
-        <div class="saved-playlists mt-5">
-            <h3 class="text-center mb-4">Your Saved Playlists</h3>
-            <div class="saved-playlists-content">
-                <!-- Saved playlists will be populated here -->
-            </div>
-        </div>
-        {% endif %}
     </div>
     <footer class="footer">
         <p>
@@ -71,5 +62,42 @@
     </footer>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script>
+        async function generatePlaylist() {
+            const mood = document.getElementById('moodInput').value;
+            const city = document.getElementById('cityInput').value;
+            
+            try {
+                const response = await fetch('/api/generate-playlist', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ mood, city })
+                });
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                    return;
+                }
+                
+                // Display suggested moods
+                const moodTags = document.getElementById('moodTags');
+                moodTags.innerHTML = data.suggested_moods
+                    .map(mood => `<span class="badge bg-secondary me-2 mb-2">${mood}</span>`)
+                    .join('');
+                document.getElementById('suggestedMoods').style.display = 'block';
+                
+                // Show playlist link
+                document.getElementById('playlistLink').href = data.playlist_url;
+                document.getElementById('playlistResult').style.display = 'block';
+                
+            } catch (error) {
+                alert('Error generating playlist: ' + error.message);
+            }
+        }
+    </script>
 </body>
 </html>
