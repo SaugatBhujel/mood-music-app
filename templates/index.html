@@ -84,6 +84,12 @@
 </head>
 <body>
     <div class="container">
+        <div id="alertDiv" class="alert" style="display: none;"></div>
+        <div id="loadingSpinner" class="text-center" style="display: none;">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
         <header class="text-center py-5">
             <h1 class="display-4">Mood Music</h1>
             <p class="lead">Generate playlists that match your mood</p>
@@ -98,19 +104,19 @@
         <div class="mood-selector">
             <h2 class="text-center mb-4">Quick Mood Selection</h2>
             <div class="mood-buttons">
-                <button class="mood-btn" onclick="generateQuickPlaylist('happy')">
+                <button class="mood-btn" data-mood="happy">
                     <i class="fas fa-smile"></i>
                     <span>Happy</span>
                 </button>
-                <button class="mood-btn" onclick="generateQuickPlaylist('sad')">
+                <button class="mood-btn" data-mood="sad">
                     <i class="fas fa-frown"></i>
                     <span>Sad</span>
                 </button>
-                <button class="mood-btn" onclick="generateQuickPlaylist('energetic')">
+                <button class="mood-btn" data-mood="energetic">
                     <i class="fas fa-bolt"></i>
                     <span>Energetic</span>
                 </button>
-                <button class="mood-btn" onclick="generateQuickPlaylist('calm')">
+                <button class="mood-btn" data-mood="calm">
                     <i class="fas fa-peace"></i>
                     <span>Calm</span>
                 </button>
@@ -125,7 +131,7 @@
                             <div class="card-body">
                                 <h5 class="card-title">Tell us more about your mood</h5>
                                 <div class="form-group mb-3">
-                                    <input type="text" id="moodInput" class="form-control" 
+                                    <input type="text" id="moodText" class="form-control" 
                                            placeholder="Describe how you're feeling...">
                                 </div>
                                 <div class="form-group mb-3">
@@ -136,9 +142,11 @@
                                     <h6>Suggested Moods:</h6>
                                     <div class="d-flex flex-wrap" id="moodTags"></div>
                                 </div>
-                                <button onclick="generateAdvancedPlaylist()" class="btn btn-primary">
-                                    Generate Smart Playlist
-                                </button>
+                                <form id="advancedMoodForm">
+                                    <button class="btn btn-primary">
+                                        Generate Smart Playlist
+                                    </button>
+                                </form>
                             </div>
                         </div>
                     </div>
@@ -174,57 +182,73 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        async function generateQuickPlaylist(mood) {
+        let currentMood = '';
+
+        // Debug logging
+        console.log('Script loaded');
+
+        async function handleQuickMood(mood) {
+            console.log('Quick mood selected:', mood);
+            currentMood = mood;
             try {
-                const response = await fetch('/api/generate-playlist', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ mood })
-                });
-                
-                handlePlaylistResponse(response);
+                showLoading();
+                await handleMoodSelection(mood);
             } catch (error) {
                 console.error('Error:', error);
-                alert('Error generating playlist. Please try again.');
+                showError('Failed to process mood. Please try again.');
+            } finally {
+                hideLoading();
             }
         }
 
-        async function generateAdvancedPlaylist() {
-            const mood = document.getElementById('moodInput').value;
+        async function handleAdvancedMood(event) {
+            event.preventDefault();
+            const moodText = document.getElementById('moodText').value;
             const city = document.getElementById('cityInput').value;
             
+            if (!moodText) {
+                showError('Please describe your mood');
+                return;
+            }
+            
+            currentMood = moodText;
             try {
-                const response = await fetch('/api/generate-playlist', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ mood, city })
-                });
-                
-                handlePlaylistResponse(response);
+                showLoading();
+                await handleMoodSelection(moodText, city);
             } catch (error) {
                 console.error('Error:', error);
-                alert('Error generating playlist. Please try again.');
+                showError('Failed to process mood. Please try again.');
+            } finally {
+                hideLoading();
             }
         }
 
-        async function handleMoodSelection(mood) {
+        async function handleMoodSelection(mood, city = null) {
             try {
                 const response = await fetch('/api/get-recommendations', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ mood: mood })
+                    body: JSON.stringify({ 
+                        mood: mood,
+                        city: city 
+                    })
                 });
                 
-                if (!response.ok) throw new Error('Failed to get recommendations');
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Failed to get recommendations');
+                }
                 
                 const data = await response.json();
+                if (!data.tracks || data.tracks.length === 0) {
+                    showError('No tracks found for this mood. Please try a different mood.');
+                    return;
+                }
+                
                 displayRecommendations(data.tracks);
+                
             } catch (error) {
                 console.error('Error:', error);
                 showError('Failed to get recommendations. Please try again.');
@@ -276,6 +300,7 @@
             }
             
             try {
+                showLoading();
                 const response = await fetch('/api/create-playlist', {
                     method: 'POST',
                     headers: {
@@ -287,7 +312,10 @@
                     })
                 });
                 
-                if (!response.ok) throw new Error('Failed to create playlist');
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Failed to create playlist');
+                }
                 
                 const data = await response.json();
                 showSuccess(`Playlist created! <a href="${data.playlist_url}" target="_blank">Open in Spotify</a>`);
@@ -295,39 +323,73 @@
             } catch (error) {
                 console.error('Error:', error);
                 showError('Failed to create playlist. Please try again.');
+            } finally {
+                hideLoading();
             }
-        }
-
-        async function handlePlaylistResponse(response) {
-            const data = await response.json();
-            
-            if (response.status === 401) {
-                window.location.href = "{{ url_for('spotify_login') }}";
-                return;
-            }
-            
-            if (data.error) {
-                alert('Error: ' + data.error);
-                return;
-            }
-            
-            if (data.suggested_moods) {
-                const moodTags = document.getElementById('moodTags');
-                moodTags.innerHTML = data.suggested_moods
-                    .map(mood => `<span class="badge bg-secondary me-2 mb-2">${mood}</span>`)
-                    .join('');
-                document.getElementById('suggestedMoods').style.display = 'block';
-            }
-            
-            document.getElementById('playlistLink').href = data.playlist_url;
-            document.getElementById('playlistResult').style.display = 'block';
         }
 
         // Add event listeners
         document.addEventListener('DOMContentLoaded', () => {
-            document.getElementById('trackList').addEventListener('change', updateCreatePlaylistButton);
-            document.getElementById('createPlaylistBtn').addEventListener('click', createPlaylist);
+            console.log('DOM loaded');
+            // Quick mood buttons
+            const moodButtons = document.querySelectorAll('.mood-btn');
+            console.log('Found mood buttons:', moodButtons.length);
+            
+            moodButtons.forEach(button => {
+                const mood = button.getAttribute('data-mood');
+                console.log('Setting up button for mood:', mood);
+                button.addEventListener('click', () => {
+                    console.log('Button clicked:', mood);
+                    handleQuickMood(mood);
+                });
+            });
+
+            // Advanced mood form
+            const advancedForm = document.getElementById('advancedMoodForm');
+            if (advancedForm) {
+                advancedForm.addEventListener('submit', handleAdvancedMood);
+            }
+
+            // Track selection
+            const trackList = document.getElementById('trackList');
+            if (trackList) {
+                trackList.addEventListener('change', updateCreatePlaylistButton);
+            }
+            
+            const createPlaylistBtn = document.getElementById('createPlaylistBtn');
+            if (createPlaylistBtn) {
+                createPlaylistBtn.addEventListener('click', createPlaylist);
+            }
         });
+
+        function showLoading() {
+            const spinner = document.getElementById('loadingSpinner');
+            if (spinner) spinner.style.display = 'block';
+        }
+
+        function hideLoading() {
+            const spinner = document.getElementById('loadingSpinner');
+            if (spinner) spinner.style.display = 'none';
+        }
+
+        function showError(message) {
+            console.error('Error:', message);
+            const alertDiv = document.getElementById('alertDiv');
+            if (alertDiv) {
+                alertDiv.className = 'alert alert-danger';
+                alertDiv.innerHTML = message;
+                alertDiv.style.display = 'block';
+            }
+        }
+
+        function showSuccess(message) {
+            const alertDiv = document.getElementById('alertDiv');
+            if (alertDiv) {
+                alertDiv.className = 'alert alert-success';
+                alertDiv.innerHTML = message;
+                alertDiv.style.display = 'block';
+            }
+        }
     </script>
 </body>
 </html>
