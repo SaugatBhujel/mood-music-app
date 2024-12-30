@@ -88,10 +88,19 @@ def register():
 
 @app.route('/spotify-login')
 def spotify_login():
-    sp = create_spotify()
-    auth_url = sp.auth_manager.get_authorize_url()
-    logger.debug(f"Generated Spotify auth URL: {auth_url}")
-    return redirect(auth_url)
+    try:
+        logger.debug("Starting Spotify login process")
+        sp = create_spotify()
+        if not sp:
+            logger.error("Failed to create Spotify client")
+            return jsonify({'error': 'Failed to initialize Spotify client'}), 500
+            
+        auth_url = sp.auth_manager.get_authorize_url()
+        logger.debug(f"Generated Spotify auth URL: {auth_url}")
+        return redirect(auth_url)
+    except Exception as e:
+        logger.error(f"Error in Spotify login: {str(e)}")
+        return jsonify({'error': 'Failed to initialize Spotify login'}), 500
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -124,41 +133,61 @@ def logout():
 @app.route('/callback')
 def callback():
     try:
+        logger.debug("Received Spotify callback")
         sp = create_spotify()
+        if not sp:
+            logger.error("Failed to create Spotify client in callback")
+            return redirect(url_for('index', error='Failed to initialize Spotify client'))
+
         code = request.args.get('code')
+        if not code:
+            logger.error("No code in callback")
+            return redirect(url_for('index', error='Authentication failed'))
+
         token_info = sp.auth_manager.get_access_token(code)
         session['token_info'] = token_info
         logger.debug("Successfully got token info")
         return redirect(url_for('index'))
     except Exception as e:
         logger.error(f"Error in callback: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        return redirect(url_for('index', error=str(e)))
 
 @app.route('/api/get-recommendations', methods=['POST'])
 def get_recommendations():
     try:
+        logger.debug("Received recommendation request")
         if 'token_info' not in session:
-            return jsonify({'error': 'Not authenticated with Spotify'}), 401
+            logger.error("No token_info in session")
+            return jsonify({'error': 'Please login with Spotify first'}), 401
 
         data = request.get_json()
+        logger.debug(f"Request data: {data}")
+        
         mood = data.get('mood', '')
         city = data.get('city', None)
+        
+        logger.debug(f"Processing mood: {mood}, city: {city}")
         
         # Get enhanced mood suggestions
         suggested_moods = mood_detector.combine_moods(mood, city)
         primary_mood = suggested_moods[0]
+        logger.debug(f"Primary mood: {primary_mood}")
         
         # Create Spotify client with stored token
         sp = spotipy.Spotify(auth=session['token_info']['access_token'])
         
         try:
             # Get track recommendations based on search
+            logger.debug(f"Searching for tracks with genre: {primary_mood.lower()}")
             results = sp.search(q=f"genre:{primary_mood.lower()}", type='track', limit=5)
+            
             if not results['tracks']['items']:
+                logger.debug("No tracks found for mood genre, falling back to pop genre")
                 results = sp.search(q='genre:pop', type='track', limit=5)
             
             # Use track IDs as seeds
             seed_tracks = [track['id'] for track in results['tracks']['items'][:5]]
+            logger.debug(f"Using seed tracks: {seed_tracks}")
             
             # Get recommendations using track seeds
             recommendations = sp.recommendations(
@@ -169,7 +198,7 @@ def get_recommendations():
             )
             
         except Exception as e:
-            logger.error(f"Error in recommendation process: {str(e)}")
+            logger.error(f"Error in Spotify recommendation process: {str(e)}")
             # Fallback to simple search
             results = sp.search(
                 q=f"mood:{primary_mood.lower()}",
@@ -181,25 +210,37 @@ def get_recommendations():
         # Format track information for frontend
         tracks = []
         for track in recommendations['tracks']:
-            tracks.append({
-                'id': track['id'],
-                'name': track['name'],
-                'artist': track['artists'][0]['name'],
-                'album': track['album']['name'],
-                'album_image': track['album']['images'][0]['url'] if track['album']['images'] else None,
-                'uri': track['uri'],
-                'preview_url': track['preview_url'],
-                'external_url': track['external_urls']['spotify']
-            })
+            try:
+                track_data = {
+                    'id': track['id'],
+                    'name': track['name'],
+                    'artist': track['artists'][0]['name'],
+                    'album': track['album']['name'],
+                    'album_image': track['album']['images'][0]['url'] if track['album']['images'] else None,
+                    'uri': track['uri'],
+                    'preview_url': track['preview_url'],
+                    'external_url': track['external_urls']['spotify']
+                }
+                tracks.append(track_data)
+                logger.debug(f"Processed track: {track['name']}")
+            except Exception as e:
+                logger.error(f"Error processing track {track.get('name', 'unknown')}: {str(e)}")
+                continue
         
-        return jsonify({
+        if not tracks:
+            logger.error("No tracks were successfully processed")
+            return jsonify({'error': 'No tracks found for this mood'}), 404
+        
+        response_data = {
             'tracks': tracks,
             'suggested_moods': suggested_moods
-        })
+        }
+        logger.debug(f"Returning {len(tracks)} tracks")
+        return jsonify(response_data)
         
     except Exception as e:
         logger.error(f"Error getting recommendations: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Failed to get recommendations. Please make sure you are logged in with Spotify.'}), 500
 
 @app.route('/api/create-playlist', methods=['POST'])
 def create_playlist():
