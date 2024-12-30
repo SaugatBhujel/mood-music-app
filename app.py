@@ -141,7 +141,8 @@ def generate_playlist():
         sp = spotipy.Spotify(auth=session['token_info']['access_token'])
         
         # Get available genres first
-        available_genres = sp.recommendation_genres()['genres']
+        genres = sp.recommendation_genre_seeds()
+        available_genres = genres['genres']
         
         # Filter our genre suggestions to only include available ones
         suggested_genres = get_genres_for_mood(primary_mood)
@@ -149,7 +150,7 @@ def generate_playlist():
         
         # If no valid genres found, use some safe defaults
         if not valid_genres:
-            valid_genres = ['pop', 'rock']
+            valid_genres = ['pop', 'indie-pop', 'rock']
         
         # Limit to 5 genres as that's the maximum allowed
         valid_genres = valid_genres[:5]
@@ -185,18 +186,18 @@ def generate_playlist():
 def get_genres_for_mood(mood):
     """Map moods to appropriate genres"""
     mood_genres = {
-        'Happy': ['pop', 'dance', 'happy'],
-        'Energetic': ['dance', 'electronic', 'power-pop'],
-        'Peaceful': ['ambient', 'classical', 'sleep'],
-        'Melancholic': ['sad', 'indie', 'piano'],
-        'Relaxed': ['chill', 'ambient', 'jazz'],
-        'Focused': ['focus', 'study', 'classical'],
-        'Mellow': ['chill', 'indie', 'folk'],
-        'Romantic': ['romance', 'jazz', 'r-n-b'],
-        'Night': ['sleep', 'ambient', 'chill'],
-        'Morning': ['pop', 'happy', 'dance']
+        'Happy': ['pop', 'dance', 'disco'],
+        'Energetic': ['electronic', 'dance', 'house'],
+        'Peaceful': ['ambient', 'classical', 'piano'],
+        'Melancholic': ['indie', 'acoustic', 'piano'],
+        'Relaxed': ['ambient', 'jazz', 'acoustic'],
+        'Focused': ['classical', 'electronic', 'ambient'],
+        'Mellow': ['indie-pop', 'folk', 'acoustic'],
+        'Romantic': ['jazz', 'soul', 'r-n-b'],
+        'Night': ['ambient', 'chill', 'electronic'],
+        'Morning': ['pop', 'indie-pop', 'dance']
     }
-    return mood_genres.get(mood, ['pop', 'rock', 'indie'])
+    return mood_genres.get(mood, ['pop', 'indie-pop', 'rock'])
 
 def get_energy_for_mood(mood):
     """Map moods to energy levels (0.0 to 1.0)"""
