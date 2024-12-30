@@ -158,6 +158,28 @@
             box-shadow: 0 5px 15px rgba(231, 76, 60, 0.3);
         }
 
+        .btn-spotify {
+            background: #1DB954;
+            color: white;
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+        }
+
+        .btn-spotify:hover {
+            background: #1ed760;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(29, 185, 84, 0.3);
+            color: white;
+            text-decoration: none;
+        }
+
         .animate-fade-in {
             animation: fadeIn 0.5s ease-in-out;
         }
@@ -275,97 +297,33 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        let currentMood = '';
-        console.log('Script loaded');
-
-        function createTrackElement(track) {
-            const div = document.createElement('div');
-            div.className = 'track-card animate-fade-in';
-            div.innerHTML = `
-                <img src="${track.album.images[0].url}" alt="${track.name}" class="track-image">
-                <div class="track-info">
-                    <h4 class="track-title">${track.name}</h4>
-                    <p class="track-artist">${track.artists[0].name}</p>
-                    ${track.preview_url ? `
-                        <audio class="audio-preview" controls>
-                            <source src="${track.preview_url}" type="audio/mpeg">
-                        </audio>
-                    ` : '<p class="text-muted">No preview available</p>'}
-                </div>
-                <div>
-                    <button class="btn-action" onclick="addToPlaylist('${track.id}')">
-                        <i class="fas fa-plus"></i>
-                    </button>
-                </div>
-            `;
-            return div;
-        }
-
         async function handleQuickMood(mood) {
-            console.log('Quick mood selected:', mood);
-            currentMood = mood;
-            try {
-                showLoading();
-                await handleMoodSelection(mood);
-            } catch (error) {
-                console.error('Error:', error);
-                showError('Failed to process mood. Please try again.');
-            } finally {
-                hideLoading();
-            }
-        }
-
-        async function handleAdvancedMood(event) {
-            event.preventDefault();
-            const moodText = document.getElementById('moodText').value;
-            const city = document.getElementById('cityInput').value;
-            
-            if (!moodText) {
-                showError('Please describe your mood');
-                return;
-            }
-            
-            currentMood = moodText;
-            try {
-                showLoading();
-                await handleMoodSelection(moodText, city);
-            } catch (error) {
-                console.error('Error:', error);
-                showError('Failed to process mood. Please try again.');
-            } finally {
-                hideLoading();
-            }
-        }
-
-        async function handleMoodSelection(mood, city = null) {
+            showLoading();
             try {
                 const response = await fetch('/api/get-recommendations', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({ 
-                        mood: mood,
-                        city: city 
-                    })
+                    body: JSON.stringify({ mood: mood })
                 });
                 
                 if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error || 'Failed to get recommendations');
+                    throw new Error('Failed to get recommendations');
                 }
                 
                 const data = await response.json();
-                if (!data.tracks || data.tracks.length === 0) {
-                    showError('No tracks found for this mood. Please try a different mood.');
-                    return;
+                if (data.error) {
+                    showError(data.error);
+                } else {
+                    displayRecommendations(data.tracks);
+                    document.getElementById('playlistSection').style.display = 'block';
                 }
-                
-                displayRecommendations(data.tracks);
-                
             } catch (error) {
-                console.error('Error:', error);
                 showError('Failed to get recommendations. Please try again.');
+                console.error('Error:', error);
+            } finally {
+                hideLoading();
             }
         }
 
@@ -377,40 +335,102 @@
                 const trackElement = createTrackElement(track);
                 setTimeout(() => {
                     trackList.appendChild(trackElement);
-                }, index * 100); // Stagger the animation
+                    trackElement.classList.add('animate__animated', 'animate__fadeInUp');
+                }, index * 100);
             });
             
             document.getElementById('recommendationsSection').style.display = 'block';
-            updateCreatePlaylistButton();
+        }
+
+        function createTrackElement(track) {
+            const div = document.createElement('div');
+            div.className = 'track-card animate__animated animate__fadeIn';
+            div.dataset.trackId = track.id;
+            
+            div.innerHTML = `
+                <img src="${track.album_image || 'path/to/default-image.jpg'}" alt="${track.name}" class="track-image">
+                <div class="track-info">
+                    <h4 class="track-title">${track.name}</h4>
+                    <p class="track-artist">${track.artist}</p>
+                    ${track.preview_url ? `
+                        <audio class="audio-preview" controls>
+                            <source src="${track.preview_url}" type="audio/mpeg">
+                        </audio>
+                    ` : '<p class="text-muted">No preview available</p>'}
+                    <a href="${track.external_url}" target="_blank" class="btn-spotify">
+                        <i class="fab fa-spotify"></i> Open in Spotify
+                    </a>
+                </div>
+            `;
+            return div;
+        }
+
+        async function createPlaylist() {
+            const playlistName = document.getElementById('playlistName').value;
+            if (!playlistName) {
+                showError('Please enter a playlist name');
+                return;
+            }
+
+            showLoading();
+            try {
+                const response = await fetch('/create_playlist', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        name: playlistName,
+                        tracks: Array.from(document.querySelectorAll('.track-card'))
+                            .map(card => card.dataset.trackId)
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to create playlist');
+                }
+
+                const data = await response.json();
+                if (data.error) {
+                    showError(data.error);
+                } else {
+                    showSuccess('Playlist created successfully!');
+                    document.getElementById('playlistName').value = '';
+                }
+            } catch (error) {
+                showError('Failed to create playlist. Please try again.');
+                console.error('Error:', error);
+            } finally {
+                hideLoading();
+            }
         }
 
         function showLoading() {
-            const spinner = document.getElementById('loadingSpinner');
-            if (spinner) spinner.style.display = 'block';
+            document.getElementById('loadingSpinner').style.display = 'block';
         }
 
         function hideLoading() {
-            const spinner = document.getElementById('loadingSpinner');
-            if (spinner) spinner.style.display = 'none';
+            document.getElementById('loadingSpinner').style.display = 'none';
         }
 
         function showError(message) {
-            console.error('Error:', message);
             const alertDiv = document.getElementById('alertDiv');
-            if (alertDiv) {
-                alertDiv.className = 'alert alert-danger animate-fade-in';
-                alertDiv.innerHTML = message;
-                alertDiv.style.display = 'block';
-            }
+            alertDiv.className = 'alert alert-danger animate__animated animate__fadeIn';
+            alertDiv.textContent = message;
+            alertDiv.style.display = 'block';
+            setTimeout(() => {
+                alertDiv.style.display = 'none';
+            }, 5000);
         }
 
         function showSuccess(message) {
             const alertDiv = document.getElementById('alertDiv');
-            if (alertDiv) {
-                alertDiv.className = 'alert alert-success animate-fade-in';
-                alertDiv.innerHTML = message;
-                alertDiv.style.display = 'block';
-            }
+            alertDiv.className = 'alert alert-success animate__animated animate__fadeIn';
+            alertDiv.textContent = message;
+            alertDiv.style.display = 'block';
+            setTimeout(() => {
+                alertDiv.style.display = 'none';
+            }, 5000);
         }
     </script>
 </body>

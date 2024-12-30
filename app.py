@@ -186,6 +186,7 @@ def get_recommendations():
                 'name': track['name'],
                 'artist': track['artists'][0]['name'],
                 'album': track['album']['name'],
+                'album_image': track['album']['images'][0]['url'] if track['album']['images'] else None,
                 'uri': track['uri'],
                 'preview_url': track['preview_url'],
                 'external_url': track['external_urls']['spotify']
