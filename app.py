@@ -16,13 +16,14 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.urandom(24)
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your-secret-key-here')  # Use environment variable or fallback
 app.config['SESSION_TYPE'] = 'filesystem'
 Session(app)
 
 # Initialize Flask-Login
 login_manager = LoginManager()
 login_manager.init_app(app)
+login_manager.login_view = 'login'  # Specify the login view
 
 # User model
 class User(UserMixin):
