@@ -14,7 +14,7 @@
             <h1 class="display-4">Mood Music</h1>
             <p class="lead">Generate playlists that match your mood</p>
             {% if not authenticated %}
-            <a href="{{ url_for('login') }}" class="btn btn-success btn-lg">
+            <a href="{{ url_for('spotify_login') }}" class="btn btn-success btn-lg">
                 <i class="fab fa-spotify"></i> Connect with Spotify
             </a>
             {% endif %}

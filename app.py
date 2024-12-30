@@ -81,17 +81,28 @@ def register():
         return redirect(url_for('profile'))
     return render_template('register.html')
 
+@app.route('/spotify-login')
+def spotify_login():
+    sp = create_spotify()
+    auth_url = sp.auth_manager.get_authorize_url()
+    logger.debug(f"Generated Spotify auth URL: {auth_url}")
+    return redirect(auth_url)
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
         email = request.form['email']
-        logger.debug(f"Login attempt for email: {email}")  # Log the email being processed
+        logger.debug(f"Login attempt for email: {email}")
         if email in users:
-            logger.debug(f"User found: {email}")  # Log if user is found
+            logger.debug(f"User found: {email}")
             login_user(users[email])
             return redirect(url_for('profile'))
         else:
-            logger.warning(f"User not found: {email}")  # Log if user is not found
+            logger.warning(f"User not found: {email}")
+            # If user not found, create a new one
+            users[email] = User(id=email)
+            login_user(users[email])
+            return redirect(url_for('profile'))
     return render_template('login.html')
 
 @app.route('/profile')
