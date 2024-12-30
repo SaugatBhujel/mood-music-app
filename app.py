@@ -140,38 +140,48 @@ def generate_playlist():
         # Create Spotify client with stored token
         sp = spotipy.Spotify(auth=session['token_info']['access_token'])
         
-        # Get recommendations based on mood
-        seed_genres = get_genres_for_mood(primary_mood)[:5]  # Limit to 5 genres
-        
-        logger.debug(f"Using seed genres: {seed_genres}")
-        
         try:
+            # First, get available genres
+            available_genres = sp.recommendation_genre_seeds()
+            logger.debug(f"Available genres: {available_genres}")
+            
+            # Get track recommendations based on search
+            results = sp.search(q=f"genre:{primary_mood.lower()}", type='track', limit=5)
+            if not results['tracks']['items']:
+                results = sp.search(q='genre:pop', type='track', limit=5)
+            
+            # Use track IDs as seeds instead of genres
+            seed_tracks = [track['id'] for track in results['tracks']['items'][:5]]
+            logger.debug(f"Using seed tracks: {seed_tracks}")
+            
+            # Get recommendations using track seeds
             recommendations = sp.recommendations(
-                seed_genres=seed_genres,
+                seed_tracks=seed_tracks,
                 limit=20,
                 target_energy=get_energy_for_mood(primary_mood),
                 target_valence=get_valence_for_mood(primary_mood)
             )
+            
         except Exception as e:
-            logger.error(f"Error getting recommendations: {str(e)}")
-            # Fallback to simpler genres if the first attempt fails
-            fallback_genres = ['pop', 'rock']
-            recommendations = sp.recommendations(
-                seed_genres=fallback_genres,
-                limit=20,
-                target_energy=0.5,
-                target_valence=0.5
+            logger.error(f"Error in recommendation process: {str(e)}")
+            # Fallback to simple search
+            results = sp.search(
+                q=f"mood:{primary_mood.lower()}",
+                type='track',
+                limit=20
             )
+            recommendations = {'tracks': results['tracks']['items']}
         
         # Create playlist
-        tracks = [track['uri'] for track in recommendations['tracks']]
         playlist_name = f"{primary_mood} Mood - {datetime.now().strftime('%Y-%m-%d')}"
-        
         user_id = sp.current_user()['id']
         playlist = sp.user_playlist_create(user_id, playlist_name, public=False)
         
-        if tracks:
-            sp.playlist_add_items(playlist['id'], tracks)
+        # Add tracks to playlist
+        if recommendations and recommendations['tracks']:
+            track_uris = [track['uri'] for track in recommendations['tracks']]
+            if track_uris:
+                sp.playlist_add_items(playlist['id'], track_uris)
         
         return jsonify({
             'playlist_id': playlist['id'],
@@ -182,22 +192,6 @@ def generate_playlist():
     except Exception as e:
         logger.error(f"Error generating playlist: {str(e)}")
         return jsonify({'error': str(e)}), 500
-
-def get_genres_for_mood(mood):
-    """Map moods to appropriate genres"""
-    mood_genres = {
-        'Happy': ['pop', 'dance', 'disco'],
-        'Energetic': ['dance', 'electronic', 'house'],
-        'Peaceful': ['classical', 'ambient', 'study'],
-        'Melancholic': ['indie', 'acoustic', 'piano'],
-        'Relaxed': ['jazz', 'acoustic', 'ambient'],
-        'Focused': ['classical', 'electronic', 'study'],
-        'Mellow': ['indie', 'folk', 'acoustic'],
-        'Romantic': ['jazz', 'soul', 'r-n-b'],
-        'Night': ['chill', 'electronic', 'study'],
-        'Morning': ['pop', 'indie', 'dance']
-    }
-    return mood_genres.get(mood, ['pop', 'rock'])
 
 def get_energy_for_mood(mood):
     """Map moods to energy levels (0.0 to 1.0)"""
@@ -213,7 +207,7 @@ def get_energy_for_mood(mood):
         'Night': 0.2,
         'Morning': 0.7
     }
-    return energy_levels.get(mood, 0.6)
+    return energy_levels.get(mood, 0.5)
 
 def get_valence_for_mood(mood):
     """Map moods to valence/positivity levels (0.0 to 1.0)"""
