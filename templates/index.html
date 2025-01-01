@@ -116,11 +116,106 @@
             backdrop-filter: blur(10px);
             border: 1px solid rgba(255, 255, 255, 0.1);
             transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
         }
 
-        .track-card:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+        .track-preview-container {
+            margin-top: 1rem;
+            position: relative;
+            width: 100%;
+        }
+
+        .custom-audio-player {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 0.75rem;
+            border-radius: 12px;
+            margin-top: 0.5rem;
+        }
+
+        .play-button {
+            background: var(--primary-color);
+            border: none;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            color: white;
+            flex-shrink: 0;
+        }
+
+        .play-button:hover {
+            transform: scale(1.1);
+            background: var(--secondary-color);
+        }
+
+        .progress-bar {
+            flex-grow: 1;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .progress {
+            height: 100%;
+            background: var(--primary-color);
+            border-radius: 2px;
+            position: absolute;
+            top: 0;
+            left: 0;
+            transition: width 0.1s linear;
+        }
+
+        .time-display {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.7);
+            min-width: 50px;
+            text-align: center;
+        }
+
+        .volume-control {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .volume-slider {
+            width: 60px;
+            height: 4px;
+            -webkit-appearance: none;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            outline: none;
+        }
+
+        .volume-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 12px;
+            height: 12px;
+            background: var(--primary-color);
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .volume-slider::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+
+        .track-actions {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
         }
 
         .track-image {
@@ -352,22 +447,106 @@
             div.className = 'track-card animate__animated animate__fadeIn';
             div.dataset.trackId = track.id;
             
+            const previewHtml = track.preview_url ? `
+                <div class="track-preview-container">
+                    <div class="custom-audio-player" data-preview-url="${track.preview_url}">
+                        <button class="play-button" onclick="togglePlay(this)">
+                            <i class="fas fa-play"></i>
+                        </button>
+                        <div class="progress-bar" onclick="seek(event, this)">
+                            <div class="progress"></div>
+                        </div>
+                        <div class="time-display">0:00</div>
+                        <div class="volume-control">
+                            <i class="fas fa-volume-up"></i>
+                            <input type="range" class="volume-slider" min="0" max="1" step="0.1" value="1" 
+                                onchange="updateVolume(this)">
+                        </div>
+                    </div>
+                </div>
+            ` : '<p class="text-muted">No preview available</p>';
+            
             div.innerHTML = `
                 <img src="${track.album_image || 'path/to/default-image.jpg'}" alt="${track.name}" class="track-image">
                 <div class="track-info">
                     <h4 class="track-title">${track.name}</h4>
                     <p class="track-artist">${track.artist}</p>
-                    ${track.preview_url ? `
-                        <audio class="audio-preview" controls>
-                            <source src="${track.preview_url}" type="audio/mpeg">
-                        </audio>
-                    ` : '<p class="text-muted">No preview available</p>'}
-                    <a href="${track.external_url}" target="_blank" class="btn-spotify">
-                        <i class="fab fa-spotify"></i> Open in Spotify
-                    </a>
+                    ${previewHtml}
+                    <div class="track-actions">
+                        <a href="${track.external_url}" target="_blank" class="btn-spotify">
+                            <i class="fab fa-spotify"></i> Open in Spotify
+                        </a>
+                    </div>
                 </div>
             `;
             return div;
+        }
+
+        // Audio player functionality
+        let currentAudio = null;
+        let currentButton = null;
+
+        function togglePlay(button) {
+            const playerContainer = button.closest('.custom-audio-player');
+            const previewUrl = playerContainer.dataset.previewUrl;
+            
+            if (currentAudio && currentAudio.src !== previewUrl) {
+                // Stop previous audio
+                currentAudio.pause();
+                currentAudio.currentTime = 0;
+                currentButton.innerHTML = '<i class="fas fa-play"></i>';
+            }
+
+            if (!currentAudio || currentAudio.src !== previewUrl) {
+                // Create new audio
+                currentAudio = new Audio(previewUrl);
+                currentAudio.addEventListener('timeupdate', () => updateProgress(playerContainer));
+                currentAudio.addEventListener('ended', () => {
+                    button.innerHTML = '<i class="fas fa-play"></i>';
+                    playerContainer.querySelector('.progress').style.width = '0%';
+                    currentAudio = null;
+                });
+            }
+
+            if (currentAudio.paused) {
+                currentAudio.play();
+                button.innerHTML = '<i class="fas fa-pause"></i>';
+            } else {
+                currentAudio.pause();
+                button.innerHTML = '<i class="fas fa-play"></i>';
+            }
+            
+            currentButton = button;
+        }
+
+        function updateProgress(playerContainer) {
+            const progress = playerContainer.querySelector('.progress');
+            const timeDisplay = playerContainer.querySelector('.time-display');
+            const percentage = (currentAudio.currentTime / currentAudio.duration) * 100;
+            progress.style.width = percentage + '%';
+            
+            const currentTime = formatTime(currentAudio.currentTime);
+            timeDisplay.textContent = currentTime;
+        }
+
+        function seek(event, progressBar) {
+            if (!currentAudio) return;
+            
+            const rect = progressBar.getBoundingClientRect();
+            const pos = (event.clientX - rect.left) / rect.width;
+            currentAudio.currentTime = pos * currentAudio.duration;
+        }
+
+        function updateVolume(slider) {
+            if (currentAudio) {
+                currentAudio.volume = slider.value;
+            }
+        }
+
+        function formatTime(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            seconds = Math.floor(seconds % 60);
+            return `${minutes}:${seconds.toString().padStart(2, '0')}`;
         }
 
         async function createPlaylist() {
