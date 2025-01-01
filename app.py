@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 import logging
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from mood_detector import MoodDetector
+import time
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG)
@@ -202,26 +203,57 @@ def get_recommendations():
         
         logger.debug(f"Processing mood: {mood}")
         
+        # Check if token needs refresh
+        if 'token_info' in session:
+            token_info = session['token_info']
+            now = int(time.time())
+            is_expired = token_info['expires_at'] - now < 60
+            
+            if is_expired:
+                logger.debug("Token expired, refreshing...")
+                sp_oauth = create_spotify()
+                token_info = sp_oauth.refresh_access_token(token_info['refresh_token'])
+                session['token_info'] = token_info
+                logger.debug("Token refreshed successfully")
+        
         # Create Spotify client with stored token
         sp = spotipy.Spotify(auth=session['token_info']['access_token'])
         
         try:
+            # Test the Spotify connection
+            sp.current_user()  # This will fail if the token is invalid
+            logger.debug("Spotify connection test successful")
+            
             # Get genres for the mood
             genres = get_genres_for_mood(mood)
             logger.debug(f"Using genres: {genres}")
             
+            # Get available genres from Spotify
+            available_genres = sp.recommendation_genre_seeds()
+            logger.debug(f"Available genres: {available_genres}")
+            
+            # Filter genres to only use available ones
+            valid_genres = [g for g in genres if g in available_genres['genres']]
+            if not valid_genres:
+                valid_genres = ['pop']  # Fallback to pop if no valid genres
+            logger.debug(f"Valid genres to use: {valid_genres}")
+            
             # Get recommendations based on genres
             recommendations = sp.recommendations(
-                seed_genres=genres[:2],  # Use first two genres as seeds
+                seed_genres=valid_genres[:2],  # Use first two valid genres as seeds
                 limit=50,  # Request more tracks to filter for ones with previews
                 target_energy=get_energy_for_mood(mood),
                 target_valence=get_valence_for_mood(mood)
             )
+            logger.debug(f"Got {len(recommendations['tracks'])} recommendations")
             
+        except spotipy.exceptions.SpotifyException as e:
+            logger.error(f"Spotify API error: {str(e)}")
+            return jsonify({'error': 'Failed to get recommendations from Spotify. Please try logging in again.'}), 401
         except Exception as e:
             logger.error(f"Error in Spotify recommendation process: {str(e)}")
             # Fallback to simple search
-            search_query = f"genre:{genres[0]}"
+            search_query = f"genre:{valid_genres[0]}"
             logger.debug(f"Falling back to search with query: {search_query}")
             results = sp.search(
                 q=search_query,
@@ -261,7 +293,7 @@ def get_recommendations():
         
         if not tracks:
             logger.error("No tracks were successfully processed")
-            return jsonify({'error': 'No tracks found for this mood'}), 404
+            return jsonify({'error': 'No tracks found for this mood. Please try a different mood.'}), 404
         
         response_data = {
             'tracks': tracks,

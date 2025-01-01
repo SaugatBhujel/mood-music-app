@@ -319,6 +319,49 @@
             color: var(--accent-color);
         }
 
+        .error-message {
+            background: rgba(255, 0, 0, 0.1);
+            border: 1px solid rgba(255, 0, 0, 0.2);
+            padding: 1rem;
+            border-radius: 12px;
+            text-align: center;
+            margin: 2rem auto;
+            max-width: 400px;
+        }
+        
+        .error-message i {
+            color: #ff4444;
+            font-size: 2rem;
+            margin-bottom: 1rem;
+        }
+        
+        .error-message p {
+            margin: 0.5rem 0;
+            color: rgba(255, 255, 255, 0.9);
+        }
+        
+        .login-button {
+            background: var(--accent-color);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            margin-top: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .login-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-light);
+        }
+
         @media (max-width: 768px) {
             .header h1 {
                 font-size: 2.5rem;
@@ -642,7 +685,8 @@
 
         function selectMood(mood) {
             console.log('Selected mood:', mood);
-            document.getElementById('recommendations').innerHTML = '<div class="loading">Loading recommendations...</div>';
+            const recommendationsDiv = document.getElementById('recommendations');
+            recommendationsDiv.innerHTML = '<div class="loading">Loading recommendations...</div>';
             
             fetch('/api/get-recommendations', {
                 method: 'POST',
@@ -653,20 +697,33 @@
                     mood: mood
                 })
             })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(data => {
+                        throw new Error(data.error || 'Failed to get recommendations');
+                    });
+                }
+                return response.json();
+            })
             .then(data => {
                 console.log('Recommendations data:', data);
                 if (data.error) {
                     throw new Error(data.error);
                 }
+                if (!data.tracks || data.tracks.length === 0) {
+                    throw new Error('No tracks found for this mood. Please try a different mood.');
+                }
                 displayTracks(data.tracks);
             })
             .catch(error => {
                 console.error('Error:', error);
-                document.getElementById('recommendations').innerHTML = `
+                recommendationsDiv.innerHTML = `
                     <div class="error-message">
                         <i class="fas fa-exclamation-circle"></i>
-                        ${error.message || 'Failed to get recommendations. Please try again.'}
+                        <p>${error.message}</p>
+                        ${error.message.includes('login') ? 
+                            '<button onclick="window.location.href=\'/spotify-login\'" class="login-button">Login with Spotify</button>' : 
+                            ''}
                     </div>
                 `;
             });
