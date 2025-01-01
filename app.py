@@ -205,24 +205,6 @@ def get_recommendations():
         
         logger.debug(f"Processing mood: {mood}")
         
-        # Check if token needs refresh
-        token_info = session['token_info']
-        logger.debug(f"Current token info: {token_info}")
-        
-        now = int(time.time())
-        is_expired = token_info['expires_at'] - now < 60
-        
-        if is_expired:
-            logger.debug("Token expired, refreshing...")
-            try:
-                sp_oauth = create_spotify()
-                token_info = sp_oauth.refresh_access_token(token_info['refresh_token'])
-                session['token_info'] = token_info
-                logger.debug("Token refreshed successfully")
-            except Exception as e:
-                logger.error(f"Error refreshing token: {str(e)}")
-                return jsonify({'error': 'Failed to refresh Spotify token. Please login again.'}), 401
-        
         # Create Spotify client with stored token
         sp = spotipy.Spotify(auth=session['token_info']['access_token'])
         
@@ -235,48 +217,19 @@ def get_recommendations():
             genres = get_genres_for_mood(mood)
             logger.debug(f"Using genres: {genres}")
             
-            # Get available genres from Spotify
-            available_genres = sp.recommendation_genre_seeds()
-            logger.debug(f"Available genres: {available_genres}")
-            
-            # Filter genres to only use available ones
-            valid_genres = [g for g in genres if g in available_genres['genres']]
-            logger.debug(f"Valid genres after filtering: {valid_genres}")
-            
-            if not valid_genres:
-                valid_genres = ['pop']  # Fallback to pop if no valid genres
-                logger.debug("No valid genres found, falling back to pop")
-            
             # Get recommendations based on genres
-            logger.debug(f"Requesting recommendations with genres: {valid_genres[:2]}")
             recommendations = sp.recommendations(
-                seed_genres=valid_genres[:2],
-                limit=50,
+                seed_genres=genres[:2],
+                limit=20,
                 target_energy=get_energy_for_mood(mood),
                 target_valence=get_valence_for_mood(mood)
             )
             
             logger.debug(f"Got {len(recommendations['tracks'])} recommendations")
             
-        except spotipy.exceptions.SpotifyException as e:
-            logger.error(f"Spotify API error: {str(e)}")
-            return jsonify({'error': f'Spotify API error: {str(e)}'}), 401
-        except Exception as e:
-            logger.error(f"Error in recommendation process: {str(e)}")
-            return jsonify({'error': f'Error getting recommendations: {str(e)}'}), 500
-
-        # Format track information for frontend
-        tracks = []
-        preview_count = 0
-        no_preview_count = 0
-        
-        for track in recommendations['tracks']:
-            try:
-                if not track.get('preview_url'):
-                    no_preview_count += 1
-                    continue
-                    
-                preview_count += 1
+            # Format track information for frontend
+            tracks = []
+            for track in recommendations['tracks']:
                 track_data = {
                     'id': track['id'],
                     'name': track['name'],
@@ -289,31 +242,22 @@ def get_recommendations():
                 }
                 tracks.append(track_data)
                 logger.debug(f"Added track: {track['name']} by {track['artists'][0]['name']}")
-                
-                if len(tracks) >= 20:
-                    break
-            except Exception as e:
-                logger.error(f"Error processing track {track.get('name', 'unknown')}: {str(e)}")
-                continue
-        
-        logger.debug(f"Processed tracks - With preview: {preview_count}, Without preview: {no_preview_count}")
-        
-        if not tracks:
-            logger.error("No tracks were successfully processed")
-            return jsonify({'error': 'No tracks found with previews for this mood. Please try a different mood.'}), 404
-        
-        response_data = {
-            'tracks': tracks,
-            'mood': mood,
-            'stats': {
-                'total_tracks': len(recommendations['tracks']),
-                'tracks_with_preview': preview_count,
-                'tracks_without_preview': no_preview_count
+            
+            if not tracks:
+                logger.error("No tracks were found")
+                return jsonify({'error': 'No tracks found for this mood. Please try a different mood.'}), 404
+            
+            response_data = {
+                'tracks': tracks,
+                'mood': mood
             }
-        }
-        logger.debug(f"=== Finished processing. Returning {len(tracks)} tracks ===")
-        return jsonify(response_data)
-        
+            logger.debug(f"=== Finished processing. Returning {len(tracks)} tracks ===")
+            return jsonify(response_data)
+            
+        except spotipy.exceptions.SpotifyException as e:
+            logger.error(f"Spotify API error: {str(e)}")
+            return jsonify({'error': f'Spotify API error: {str(e)}'}), 401
+            
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}")
         return jsonify({'error': 'An unexpected error occurred. Please try again.'}), 500
