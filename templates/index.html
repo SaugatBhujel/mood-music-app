@@ -362,6 +362,27 @@
             color: var(--text-light);
         }
 
+        .loading i {
+            margin-right: 0.5rem;
+            color: var(--accent-color);
+        }
+        
+        .retry-button {
+            background: var(--accent-color);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            margin-top: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .retry-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
         @media (max-width: 768px) {
             .header h1 {
                 font-size: 2.5rem;
@@ -686,7 +707,13 @@
         function selectMood(mood) {
             console.log('Selected mood:', mood);
             const recommendationsDiv = document.getElementById('recommendations');
-            recommendationsDiv.innerHTML = '<div class="loading">Loading recommendations...</div>';
+            recommendationsDiv.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i> Finding the perfect tracks for your mood...</div>';
+            
+            // Clear any existing error messages
+            const errorDiv = document.querySelector('.error-message');
+            if (errorDiv) {
+                errorDiv.remove();
+            }
             
             fetch('/api/get-recommendations', {
                 method: 'POST',
@@ -698,21 +725,25 @@
                 })
             })
             .then(response => {
-                if (!response.ok) {
-                    return response.json().then(data => {
+                console.log('Response status:', response.status);
+                return response.json().then(data => {
+                    if (!response.ok) {
                         throw new Error(data.error || 'Failed to get recommendations');
-                    });
-                }
-                return response.json();
+                    }
+                    return data;
+                });
             })
             .then(data => {
                 console.log('Recommendations data:', data);
-                if (data.error) {
-                    throw new Error(data.error);
-                }
                 if (!data.tracks || data.tracks.length === 0) {
                     throw new Error('No tracks found for this mood. Please try a different mood.');
                 }
+                
+                // Log statistics
+                if (data.stats) {
+                    console.log('Track statistics:', data.stats);
+                }
+                
                 displayTracks(data.tracks);
             })
             .catch(error => {
@@ -723,11 +754,43 @@
                         <p>${error.message}</p>
                         ${error.message.includes('login') ? 
                             '<button onclick="window.location.href=\'/spotify-login\'" class="login-button">Login with Spotify</button>' : 
-                            ''}
+                            '<button onclick="selectMood(\'' + mood + '\')" class="retry-button">Try Again</button>'}
                     </div>
                 `;
             });
         }
+
+        const style = document.createElement('style');
+        style.textContent = `
+            .loading {
+                text-align: center;
+                padding: 2rem;
+                color: var(--text-light);
+                font-size: 1.1rem;
+            }
+            
+            .loading i {
+                margin-right: 0.5rem;
+                color: var(--accent-color);
+            }
+            
+            .retry-button {
+                background: var(--accent-color);
+                color: white;
+                border: none;
+                padding: 0.5rem 1rem;
+                border-radius: 8px;
+                margin-top: 1rem;
+                cursor: pointer;
+                transition: all 0.3s ease;
+            }
+            
+            .retry-button:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            }
+        `;
+        document.head.appendChild(style);
     </script>
 </body>
 </html>
