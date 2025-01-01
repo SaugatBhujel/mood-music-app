@@ -178,11 +178,11 @@ def get_valence_for_mood(mood):
 def get_genres_for_mood(mood):
     """Map moods to Spotify genres"""
     mood_genres = {
-        'happy': ['pop', 'dance', 'happy'],
-        'sad': ['sad', 'acoustic', 'piano'],
-        'energetic': ['dance', 'electronic', 'workout'],
-        'calm': ['ambient', 'chill', 'sleep'],
-        'romantic': ['romance', 'jazz', 'r-n-b']
+        'happy': ['pop', 'dance-pop', 'party'],
+        'sad': ['acoustic', 'indie', 'piano'],
+        'energetic': ['edm', 'dance', 'electronic'],
+        'calm': ['ambient', 'study', 'classical'],
+        'romantic': ['r-n-b', 'soul', 'jazz']
     }
     return mood_genres.get(mood.lower(), ['pop'])
 
@@ -225,13 +225,22 @@ def get_recommendations():
             user = sp.current_user()
             logger.debug(f"Spotify connection test successful. User: {user['id']}")
             
-            # Get genres for the mood
-            genres = get_genres_for_mood(mood)
-            logger.debug(f"Using genres: {genres}")
+            # Get available genres from Spotify
+            available_genres = sp.recommendation_genre_seeds()
+            logger.debug(f"Available genres: {available_genres}")
+            
+            # Get genres for the mood and filter valid ones
+            mood_genres = get_genres_for_mood(mood)
+            valid_genres = [g for g in mood_genres if g in available_genres['genres']]
+            
+            if not valid_genres:
+                valid_genres = ['pop']  # Fallback to pop if no valid genres
+            
+            logger.debug(f"Using genres: {valid_genres[:2]}")
             
             # Get recommendations based on genres
             recommendations = sp.recommendations(
-                seed_genres=genres[:2],
+                seed_genres=valid_genres[:2],
                 limit=20,
                 target_energy=get_energy_for_mood(mood),
                 target_valence=get_valence_for_mood(mood)
