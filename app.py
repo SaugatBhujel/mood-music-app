@@ -192,21 +192,33 @@ def get_recommendations():
         logger.debug("=== Starting recommendation request ===")
         logger.debug(f"Session contents: {session}")
         
+        # Check if user is logged in
         if 'token_info' not in session:
             logger.error("No token_info in session")
             return jsonify({'error': 'Please login with Spotify first'}), 401
 
+        # Get the mood from request
         data = request.get_json()
+        if not data:
+            logger.error("No JSON data in request")
+            return jsonify({'error': 'No data provided'}), 400
+            
         logger.debug(f"Request data: {data}")
         
         mood = data.get('mood', '').lower()
         if not mood:
+            logger.error("No mood specified")
             return jsonify({'error': 'Please specify a mood'}), 400
         
         logger.debug(f"Processing mood: {mood}")
         
         # Create Spotify client with stored token
-        sp = spotipy.Spotify(auth=session['token_info']['access_token'])
+        token = session['token_info'].get('access_token')
+        if not token:
+            logger.error("No access token in session")
+            return jsonify({'error': 'Invalid token. Please login again.'}), 401
+            
+        sp = spotipy.Spotify(auth=token)
         
         try:
             # Test the Spotify connection

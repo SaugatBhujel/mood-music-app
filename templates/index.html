@@ -535,6 +535,8 @@
             const recommendationsDiv = document.getElementById('recommendations');
             recommendationsDiv.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i> Finding the perfect tracks for your mood...</div>';
             
+            console.log('Sending request to /api/get-recommendations');
+            
             fetch('/api/get-recommendations', {
                 method: 'POST',
                 headers: {
@@ -545,8 +547,9 @@
                 })
             })
             .then(response => {
-                console.log('Response status:', response.status);
+                console.log('Response received:', response);
                 return response.json().then(data => {
+                    console.log('Response data:', data);
                     if (!response.ok) {
                         throw new Error(data.error || 'Failed to get recommendations');
                     }
@@ -554,7 +557,7 @@
                 });
             })
             .then(data => {
-                console.log('Recommendations data:', data);
+                console.log('Processing tracks:', data.tracks);
                 if (!data.tracks || data.tracks.length === 0) {
                     throw new Error('No tracks found for this mood. Please try a different mood.');
                 }
