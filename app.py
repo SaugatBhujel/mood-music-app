@@ -152,6 +152,39 @@ def callback():
         logger.error(f"Error in callback: {str(e)}")
         return redirect(url_for('index', error=str(e)))
 
+def get_energy_for_mood(mood):
+    """Map moods to energy levels (0.0 to 1.0)"""
+    mood_energy = {
+        'happy': 0.8,
+        'sad': 0.3,
+        'energetic': 0.9,
+        'calm': 0.2,
+        'romantic': 0.5
+    }
+    return mood_energy.get(mood.lower(), 0.5)
+
+def get_valence_for_mood(mood):
+    """Map moods to valence/positivity levels (0.0 to 1.0)"""
+    mood_valence = {
+        'happy': 0.8,
+        'sad': 0.2,
+        'energetic': 0.7,
+        'calm': 0.5,
+        'romantic': 0.6
+    }
+    return mood_valence.get(mood.lower(), 0.5)
+
+def get_genres_for_mood(mood):
+    """Map moods to Spotify genres"""
+    mood_genres = {
+        'happy': ['pop', 'dance', 'happy'],
+        'sad': ['sad', 'acoustic', 'piano'],
+        'energetic': ['dance', 'electronic', 'workout'],
+        'calm': ['ambient', 'chill', 'sleep'],
+        'romantic': ['romance', 'jazz', 'r-n-b']
+    }
+    return mood_genres.get(mood.lower(), ['pop'])
+
 @app.route('/api/get-recommendations', methods=['POST'])
 def get_recommendations():
     try:
@@ -163,47 +196,37 @@ def get_recommendations():
         data = request.get_json()
         logger.debug(f"Request data: {data}")
         
-        mood = data.get('mood', '')
-        city = data.get('city', None)
+        mood = data.get('mood', '').lower()
+        if not mood:
+            return jsonify({'error': 'Please specify a mood'}), 400
         
-        logger.debug(f"Processing mood: {mood}, city: {city}")
-        
-        # Get enhanced mood suggestions
-        suggested_moods = mood_detector.combine_moods(mood, city)
-        primary_mood = suggested_moods[0]
-        logger.debug(f"Primary mood: {primary_mood}")
+        logger.debug(f"Processing mood: {mood}")
         
         # Create Spotify client with stored token
         sp = spotipy.Spotify(auth=session['token_info']['access_token'])
         
         try:
-            # Get track recommendations based on search
-            logger.debug(f"Searching for tracks with genre: {primary_mood.lower()}")
-            results = sp.search(q=f"genre:{primary_mood.lower()}", type='track', limit=5)
+            # Get genres for the mood
+            genres = get_genres_for_mood(mood)
+            logger.debug(f"Using genres: {genres}")
             
-            if not results['tracks']['items']:
-                logger.debug("No tracks found for mood genre, falling back to pop genre")
-                results = sp.search(q='genre:pop', type='track', limit=5)
-            
-            # Use track IDs as seeds
-            seed_tracks = [track['id'] for track in results['tracks']['items'][:5]]
-            logger.debug(f"Using seed tracks: {seed_tracks}")
-            
-            # Get recommendations using track seeds
+            # Get recommendations based on genres
             recommendations = sp.recommendations(
-                seed_tracks=seed_tracks,
+                seed_genres=genres[:2],  # Use first two genres as seeds
                 limit=50,  # Request more tracks to filter for ones with previews
-                target_energy=get_energy_for_mood(primary_mood),
-                target_valence=get_valence_for_mood(primary_mood)
+                target_energy=get_energy_for_mood(mood),
+                target_valence=get_valence_for_mood(mood)
             )
             
         except Exception as e:
             logger.error(f"Error in Spotify recommendation process: {str(e)}")
-            # Fallback to simple search with preview_url filter
+            # Fallback to simple search
+            search_query = f"genre:{genres[0]}"
+            logger.debug(f"Falling back to search with query: {search_query}")
             results = sp.search(
-                q=f"mood:{primary_mood.lower()}",
+                q=search_query,
                 type='track',
-                limit=50  # Request more tracks to filter for ones with previews
+                limit=50
             )
             recommendations = {'tracks': results['tracks']['items']}
 
@@ -242,7 +265,7 @@ def get_recommendations():
         
         response_data = {
             'tracks': tracks,
-            'suggested_moods': suggested_moods
+            'mood': mood
         }
         logger.debug(f"Returning {len(tracks)} tracks")
         return jsonify(response_data)
@@ -328,38 +351,6 @@ def save_playlist():
 @app.route('/api/saved-playlists')
 def get_saved_playlists():
     return jsonify(session.get('playlists', []))
-
-def get_energy_for_mood(mood):
-    """Map moods to energy levels (0.0 to 1.0)"""
-    energy_levels = {
-        'Happy': 0.8,
-        'Energetic': 0.9,
-        'Peaceful': 0.3,
-        'Melancholic': 0.4,
-        'Relaxed': 0.3,
-        'Focused': 0.5,
-        'Mellow': 0.4,
-        'Romantic': 0.5,
-        'Night': 0.2,
-        'Morning': 0.7
-    }
-    return energy_levels.get(mood, 0.5)
-
-def get_valence_for_mood(mood):
-    """Map moods to valence/positivity levels (0.0 to 1.0)"""
-    valence_levels = {
-        'Happy': 0.8,
-        'Energetic': 0.7,
-        'Peaceful': 0.6,
-        'Melancholic': 0.3,
-        'Relaxed': 0.5,
-        'Focused': 0.6,
-        'Mellow': 0.5,
-        'Romantic': 0.6,
-        'Night': 0.4,
-        'Morning': 0.7
-    }
-    return valence_levels.get(mood, 0.5)
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5002))

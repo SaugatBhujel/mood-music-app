@@ -81,7 +81,7 @@
             letter-spacing: -0.01em;
         }
 
-        .mood-btn {
+        .mood-button {
             background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
             border: none;
             border-radius: 16px;
@@ -99,11 +99,11 @@
             gap: 0.75rem;
         }
 
-        .mood-btn i {
+        .mood-button i {
             font-size: 1.25rem;
         }
 
-        .mood-btn:hover {
+        .mood-button:hover {
             transform: translateY(-3px);
             box-shadow: 0 8px 20px rgba(46, 204, 113, 0.3);
         }
@@ -329,7 +329,7 @@
                 padding: 0 1rem;
             }
 
-            .mood-btn {
+            .mood-button {
                 padding: 1rem 1.5rem;
                 font-size: 1rem;
             }
@@ -369,19 +369,19 @@
         <div class="mood-section animate-fade-in">
             <h2 class="text-center mb-4">How are you feeling today?</h2>
             <div class="d-flex flex-wrap justify-content-center gap-3">
-                <button class="mood-btn" onclick="handleQuickMood('happy')">
+                <button class="mood-button" onclick="selectMood('happy')">
                     <i class="fas fa-smile"></i> Happy
                 </button>
-                <button class="mood-btn" onclick="handleQuickMood('sad')">
-                    <i class="fas fa-frown"></i> Sad
+                <button class="mood-button" onclick="selectMood('sad')">
+                    <i class="fas fa-sad-tear"></i> Sad
                 </button>
-                <button class="mood-btn" onclick="handleQuickMood('energetic')">
+                <button class="mood-button" onclick="selectMood('energetic')">
                     <i class="fas fa-bolt"></i> Energetic
                 </button>
-                <button class="mood-btn" onclick="handleQuickMood('calm')">
-                    <i class="fas fa-peace"></i> Calm
+                <button class="mood-button" onclick="selectMood('calm')">
+                    <i class="fas fa-cloud"></i> Calm
                 </button>
-                <button class="mood-btn" onclick="handleQuickMood('romantic')">
+                <button class="mood-button" onclick="selectMood('romantic')">
                     <i class="fas fa-heart"></i> Romantic
                 </button>
             </div>
@@ -638,6 +638,38 @@
             setTimeout(() => {
                 alertDiv.style.display = 'none';
             }, 5000);
+        }
+
+        function selectMood(mood) {
+            console.log('Selected mood:', mood);
+            document.getElementById('recommendations').innerHTML = '<div class="loading">Loading recommendations...</div>';
+            
+            fetch('/api/get-recommendations', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    mood: mood
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Recommendations data:', data);
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                displayTracks(data.tracks);
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                document.getElementById('recommendations').innerHTML = `
+                    <div class="error-message">
+                        <i class="fas fa-exclamation-circle"></i>
+                        ${error.message || 'Failed to get recommendations. Please try again.'}
+                    </div>
+                `;
+            });
         }
     </script>
 </body>
