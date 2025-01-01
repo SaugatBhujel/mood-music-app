@@ -469,93 +469,17 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        function handleQuickMood(mood) {
-            console.log('Selected mood:', mood);
+        let currentAudio = null;
+
+        function displayTracks(tracks) {
+            console.log('Displaying tracks:', tracks);
             const recommendationsDiv = document.getElementById('recommendations');
-            recommendationsDiv.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i> Finding the perfect tracks for your mood...</div>';
-            
-            fetch('/api/get-recommendations', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    mood: mood
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                console.log('Recommendations data:', data);
-                if (data.error) {
-                    throw new Error(data.error);
-                }
-                displayTracks(data.tracks);
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                recommendationsDiv.innerHTML = `
-                    <div class="error-message">
-                        <i class="fas fa-exclamation-circle"></i>
-                        <p>${error.message}</p>
-                        ${error.message.includes('login') ? 
-                            '<button onclick="window.location.href=\'/spotify-login\'" class="login-button">Login with Spotify</button>' : 
-                            '<button onclick="handleQuickMood(\'' + mood + '\')" class="retry-button">Try Again</button>'}
-                    </div>
-                `;
-            });
-        }
+            recommendationsDiv.innerHTML = '';
 
-        async function handleQuickMood(mood) {
-            showLoading();
-            try {
-                const response = await fetch('/api/get-recommendations', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ mood: mood })
-                });
-                
-                if (!response.ok) {
-                    const data = await response.json();
-                    if (response.status === 401) {
-                        // Redirect to Spotify login if not authenticated
-                        window.location.href = '/spotify-login';
-                        return;
-                    }
-                    throw new Error(data.error || 'Failed to get recommendations');
-                }
-                
-                const data = await response.json();
-                if (data.error) {
-                    showError(data.error);
-                } else if (!data.tracks || data.tracks.length === 0) {
-                    showError('No tracks found for this mood. Please try a different mood.');
-                } else {
-                    displayRecommendations(data.tracks);
-                    document.getElementById('playlistSection').style.display = 'block';
-                }
-            } catch (error) {
-                showError(error.message || 'Failed to get recommendations. Please try again.');
-                console.error('Error:', error);
-            } finally {
-                hideLoading();
-            }
-        }
-
-        function displayRecommendations(tracks) {
-            const trackList = document.getElementById('trackList');
-            trackList.innerHTML = '';
-            
-            tracks.forEach((track, index) => {
-                const trackElement = createTrackElement(track);
-                setTimeout(() => {
-                    trackList.appendChild(trackElement);
-                    trackElement.classList.add('animate__animated', 'animate__fadeInUp');
-                }, index * 100);
+            tracks.forEach(track => {
+                const div = createTrackElement(track);
+                recommendationsDiv.appendChild(div);
             });
-            
-            document.getElementById('recommendationsSection').style.display = 'block';
         }
 
         function createTrackElement(track) {
@@ -563,7 +487,7 @@
             div.className = 'track-card animate__animated animate__fadeIn';
             div.dataset.trackId = track.id;
             
-            console.log('Track preview URL:', track.preview_url); // Debug log
+            console.log('Track preview URL:', track.preview_url);
             
             const previewHtml = track.preview_url ? `
                 <div class="track-preview-container">
@@ -588,81 +512,125 @@
                     No preview available for this track
                 </div>
             `;
-            
+
             div.innerHTML = `
                 <img src="${track.album_image || 'path/to/default-image.jpg'}" alt="${track.name}" class="track-image">
                 <div class="track-info">
-                    <h4 class="track-title">${track.name}</h4>
-                    <p class="track-artist">${track.artist}</p>
-                    ${previewHtml}
-                    <div class="track-actions">
-                        <a href="${track.external_url}" target="_blank" class="btn-spotify">
-                            <i class="fab fa-spotify"></i> Open in Spotify
-                        </a>
-                    </div>
+                    <h3>${track.name}</h3>
+                    <p>${track.artist}</p>
+                    <p class="album-name">${track.album}</p>
+                </div>
+                ${previewHtml}
+                <div class="track-actions">
+                    <a href="${track.external_url}" target="_blank" class="spotify-link">
+                        <i class="fab fa-spotify"></i> Open in Spotify
+                    </a>
                 </div>
             `;
             return div;
         }
 
-        // Audio player functionality
-        let currentAudio = null;
-        let currentButton = null;
-
-        function togglePlay(button) {
-            const playerContainer = button.closest('.custom-audio-player');
-            const previewUrl = playerContainer.dataset.previewUrl;
+        function handleQuickMood(mood) {
+            console.log('Selected mood:', mood);
+            const recommendationsDiv = document.getElementById('recommendations');
+            recommendationsDiv.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i> Finding the perfect tracks for your mood...</div>';
             
-            if (currentAudio && currentAudio.src !== previewUrl) {
-                // Stop previous audio
-                currentAudio.pause();
-                currentAudio.currentTime = 0;
-                currentButton.innerHTML = '<i class="fas fa-play"></i>';
-            }
-
-            if (!currentAudio || currentAudio.src !== previewUrl) {
-                // Create new audio
-                currentAudio = new Audio(previewUrl);
-                currentAudio.addEventListener('timeupdate', () => updateProgress(playerContainer));
-                currentAudio.addEventListener('ended', () => {
-                    button.innerHTML = '<i class="fas fa-play"></i>';
-                    playerContainer.querySelector('.progress').style.width = '0%';
-                    currentAudio = null;
+            fetch('/api/get-recommendations', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    mood: mood
+                })
+            })
+            .then(response => {
+                console.log('Response status:', response.status);
+                return response.json().then(data => {
+                    if (!response.ok) {
+                        throw new Error(data.error || 'Failed to get recommendations');
+                    }
+                    return data;
                 });
-            }
-
-            if (currentAudio.paused) {
-                currentAudio.play();
-                button.innerHTML = '<i class="fas fa-pause"></i>';
-            } else {
-                currentAudio.pause();
-                button.innerHTML = '<i class="fas fa-play"></i>';
-            }
-            
-            currentButton = button;
+            })
+            .then(data => {
+                console.log('Recommendations data:', data);
+                if (!data.tracks || data.tracks.length === 0) {
+                    throw new Error('No tracks found for this mood. Please try a different mood.');
+                }
+                displayTracks(data.tracks);
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                recommendationsDiv.innerHTML = `
+                    <div class="error-message">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <p>${error.message}</p>
+                        ${error.message.includes('login') ? 
+                            '<button onclick="window.location.href=\'/spotify-login\'" class="login-button">Login with Spotify</button>' : 
+                            '<button onclick="handleQuickMood(\'' + mood + '\')" class="retry-button">Try Again</button>'}
+                    </div>
+                `;
+            });
         }
 
-        function updateProgress(playerContainer) {
-            const progress = playerContainer.querySelector('.progress');
-            const timeDisplay = playerContainer.querySelector('.time-display');
-            const percentage = (currentAudio.currentTime / currentAudio.duration) * 100;
-            progress.style.width = percentage + '%';
+        function togglePlay(button) {
+            const player = button.closest('.custom-audio-player');
+            const icon = button.querySelector('i');
+            const previewUrl = player.dataset.previewUrl;
             
-            const currentTime = formatTime(currentAudio.currentTime);
-            timeDisplay.textContent = currentTime;
+            if (currentAudio && currentAudio.player !== player) {
+                // Stop other playing audio
+                const otherIcon = currentAudio.player.querySelector('.play-button i');
+                otherIcon.className = 'fas fa-play';
+                currentAudio.audio.pause();
+                currentAudio = null;
+            }
+            
+            if (!currentAudio) {
+                // Start playing new audio
+                const audio = new Audio(previewUrl);
+                const progressBar = player.querySelector('.progress');
+                const timeDisplay = player.querySelector('.time-display');
+                
+                audio.addEventListener('timeupdate', () => {
+                    const progress = (audio.currentTime / audio.duration) * 100;
+                    progressBar.style.width = progress + '%';
+                    timeDisplay.textContent = formatTime(audio.currentTime);
+                });
+                
+                audio.addEventListener('ended', () => {
+                    icon.className = 'fas fa-play';
+                    currentAudio = null;
+                });
+                
+                audio.play();
+                currentAudio = { audio, player };
+                icon.className = 'fas fa-pause';
+            } else {
+                // Toggle existing audio
+                if (currentAudio.audio.paused) {
+                    currentAudio.audio.play();
+                    icon.className = 'fas fa-pause';
+                } else {
+                    currentAudio.audio.pause();
+                    icon.className = 'fas fa-play';
+                }
+            }
         }
 
         function seek(event, progressBar) {
-            if (!currentAudio) return;
-            
-            const rect = progressBar.getBoundingClientRect();
-            const pos = (event.clientX - rect.left) / rect.width;
-            currentAudio.currentTime = pos * currentAudio.duration;
+            if (currentAudio && currentAudio.player === progressBar.closest('.custom-audio-player')) {
+                const rect = progressBar.getBoundingClientRect();
+                const x = event.clientX - rect.left;
+                const percentage = x / rect.width;
+                currentAudio.audio.currentTime = percentage * currentAudio.audio.duration;
+            }
         }
 
         function updateVolume(slider) {
             if (currentAudio) {
-                currentAudio.volume = slider.value;
+                currentAudio.audio.volume = slider.value;
             }
         }
 
@@ -672,105 +640,19 @@
             return `${minutes}:${seconds.toString().padStart(2, '0')}`;
         }
 
-        async function createPlaylist() {
-            const playlistName = document.getElementById('playlistName').value;
-            if (!playlistName) {
-                showError('Please enter a playlist name');
-                return;
-            }
-
-            showLoading();
-            try {
-                const response = await fetch('/create_playlist', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        name: playlistName,
-                        tracks: Array.from(document.querySelectorAll('.track-card'))
-                            .map(card => card.dataset.trackId)
-                    })
-                });
-
-                if (!response.ok) {
-                    throw new Error('Failed to create playlist');
-                }
-
-                const data = await response.json();
-                if (data.error) {
-                    showError(data.error);
-                } else {
-                    showSuccess('Playlist created successfully!');
-                    document.getElementById('playlistName').value = '';
-                }
-            } catch (error) {
-                showError('Failed to create playlist. Please try again.');
-                console.error('Error:', error);
-            } finally {
-                hideLoading();
-            }
-        }
-
-        function showLoading() {
-            document.getElementById('loadingSpinner').style.display = 'block';
-        }
-
-        function hideLoading() {
-            document.getElementById('loadingSpinner').style.display = 'none';
-        }
-
-        function showError(message) {
-            const alertDiv = document.getElementById('alertDiv');
-            alertDiv.className = 'alert alert-danger animate__animated animate__fadeIn';
-            alertDiv.textContent = message;
-            alertDiv.style.display = 'block';
+        function showAlert(message, type = 'success') {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3`;
+            alertDiv.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            `;
+            document.body.appendChild(alertDiv);
+            
             setTimeout(() => {
                 alertDiv.style.display = 'none';
             }, 5000);
         }
-
-        function showSuccess(message) {
-            const alertDiv = document.getElementById('alertDiv');
-            alertDiv.className = 'alert alert-success animate__animated animate__fadeIn';
-            alertDiv.textContent = message;
-            alertDiv.style.display = 'block';
-            setTimeout(() => {
-                alertDiv.style.display = 'none';
-            }, 5000);
-        }
-
-        const style = document.createElement('style');
-        style.textContent = `
-            .loading {
-                text-align: center;
-                padding: 2rem;
-                color: var(--text-light);
-                font-size: 1.1rem;
-            }
-            
-            .loading i {
-                margin-right: 0.5rem;
-                color: var(--accent-color);
-            }
-            
-            .retry-button {
-                background: var(--accent-color);
-                color: white;
-                border: none;
-                padding: 0.5rem 1rem;
-                border-radius: 8px;
-                margin-top: 1rem;
-                cursor: pointer;
-                transition: all 0.3s ease;
-            }
-            
-            .retry-button:hover {
-                transform: translateY(-2px);
-                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-            }
-        `;
-        document.head.appendChild(style);
     </script>
 </body>
 </html>
