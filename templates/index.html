@@ -303,6 +303,22 @@
             color: var(--text-light);
         }
 
+        .no-preview-message {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 1rem;
+            border-radius: 12px;
+            color: rgba(255, 255, 255, 0.8);
+            text-align: center;
+            margin-top: 1rem;
+            font-size: 0.9rem;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .no-preview-message i {
+            margin-right: 0.5rem;
+            color: var(--accent-color);
+        }
+
         @media (max-width: 768px) {
             .header h1 {
                 font-size: 2.5rem;
@@ -447,6 +463,8 @@
             div.className = 'track-card animate__animated animate__fadeIn';
             div.dataset.trackId = track.id;
             
+            console.log('Track preview URL:', track.preview_url); // Debug log
+            
             const previewHtml = track.preview_url ? `
                 <div class="track-preview-container">
                     <div class="custom-audio-player" data-preview-url="${track.preview_url}">
@@ -464,7 +482,12 @@
                         </div>
                     </div>
                 </div>
-            ` : '<p class="text-muted">No preview available</p>';
+            ` : `
+                <div class="no-preview-message">
+                    <i class="fas fa-music-slash"></i>
+                    No preview available for this track
+                </div>
+            `;
             
             div.innerHTML = `
                 <img src="${track.album_image || 'path/to/default-image.jpg'}" alt="${track.name}" class="track-image">

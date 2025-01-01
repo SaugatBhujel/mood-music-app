@@ -192,18 +192,18 @@ def get_recommendations():
             # Get recommendations using track seeds
             recommendations = sp.recommendations(
                 seed_tracks=seed_tracks,
-                limit=20,
+                limit=50,  # Request more tracks to filter for ones with previews
                 target_energy=get_energy_for_mood(primary_mood),
                 target_valence=get_valence_for_mood(primary_mood)
             )
             
         except Exception as e:
             logger.error(f"Error in Spotify recommendation process: {str(e)}")
-            # Fallback to simple search
+            # Fallback to simple search with preview_url filter
             results = sp.search(
                 q=f"mood:{primary_mood.lower()}",
                 type='track',
-                limit=20
+                limit=50  # Request more tracks to filter for ones with previews
             )
             recommendations = {'tracks': results['tracks']['items']}
 
@@ -211,6 +211,11 @@ def get_recommendations():
         tracks = []
         for track in recommendations['tracks']:
             try:
+                # Skip tracks without preview URLs
+                if not track.get('preview_url'):
+                    logger.debug(f"Skipping track without preview: {track.get('name', 'unknown')}")
+                    continue
+                    
                 track_data = {
                     'id': track['id'],
                     'name': track['name'],
@@ -222,7 +227,11 @@ def get_recommendations():
                     'external_url': track['external_urls']['spotify']
                 }
                 tracks.append(track_data)
-                logger.debug(f"Processed track: {track['name']}")
+                logger.debug(f"Added track with preview: {track['name']}")
+                
+                # Stop after getting 20 tracks with previews
+                if len(tracks) >= 20:
+                    break
             except Exception as e:
                 logger.error(f"Error processing track {track.get('name', 'unknown')}: {str(e)}")
                 continue
