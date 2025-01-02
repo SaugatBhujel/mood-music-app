@@ -90,18 +90,16 @@ def register():
 @app.route('/spotify-login')
 def spotify_login():
     try:
-        logger.debug("Starting Spotify login process")
-        sp = create_spotify()
-        if not sp:
-            logger.error("Failed to create Spotify client")
-            return jsonify({'error': 'Failed to initialize Spotify client'}), 500
-            
-        auth_url = sp.auth_manager.get_authorize_url()
-        logger.debug(f"Generated Spotify auth URL: {auth_url}")
+        sp_oauth = SpotifyOAuth(
+            client_id=SPOTIPY_CLIENT_ID,
+            client_secret=SPOTIPY_CLIENT_SECRET,
+            redirect_uri=SPOTIPY_REDIRECT_URI,
+            scope='user-library-read playlist-modify-public user-top-read streaming'
+        )
+        auth_url = sp_oauth.get_authorize_url()
         return redirect(auth_url)
     except Exception as e:
-        logger.error(f"Error in Spotify login: {str(e)}")
-        return jsonify({'error': 'Failed to initialize Spotify login'}), 500
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -206,31 +204,40 @@ def get_recommendations():
         if not mood:
             return jsonify({'error': 'Please select a mood'}), 400
 
-        # Define search queries for each mood
-        mood_queries = {
-            'happy': 'Happy Pharrell Williams',
-            'sad': 'Someone Like You Adele',
-            'energetic': 'Uptown Funk Bruno Mars',
-            'calm': 'River Flows in You Yiruma',
-            'romantic': 'All of Me John Legend'
+        # Use genre seeds instead of track seeds
+        mood_to_genres = {
+            'happy': ['pop', 'dance'],
+            'sad': ['acoustic', 'piano'],
+            'energetic': ['dance', 'electronic'],
+            'calm': ['ambient', 'classical'],
+            'romantic': ['jazz', 'soul']
         }
 
-        # Search for a track based on mood
-        query = mood_queries.get(mood, mood_queries['happy'])
-        results = sp.search(q=query, type='track', limit=1)
-        
-        if not results['tracks']['items']:
-            return jsonify({'error': 'Could not find seed track'}), 500
-            
-        seed_track = results['tracks']['items'][0]['id']
-        
-        # Get recommendations using the found track
+        # Get mood-specific parameters
+        target_energy = {
+            'happy': 0.8,
+            'sad': 0.3,
+            'energetic': 0.9,
+            'calm': 0.3,
+            'romantic': 0.5
+        }.get(mood, 0.5)
+
+        target_valence = {
+            'happy': 0.8,
+            'sad': 0.3,
+            'energetic': 0.7,
+            'calm': 0.5,
+            'romantic': 0.6
+        }.get(mood, 0.5)
+
+        # Get recommendations using genres
         try:
             recommendations = sp.recommendations(
-                seed_tracks=[seed_track],
+                seed_genres=mood_to_genres[mood][:2],  # Use up to 2 genres
                 limit=20,
-                target_energy=0.8 if mood == 'energetic' else 0.5,
-                target_valence=0.8 if mood == 'happy' else 0.5
+                target_energy=target_energy,
+                target_valence=target_valence,
+                min_popularity=50  # Ensure we get relatively popular tracks
             )
         except Exception as e:
             return jsonify({'error': f'Failed to get recommendations: {str(e)}'}), 500
