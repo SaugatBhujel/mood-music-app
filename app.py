@@ -206,23 +206,31 @@ def get_recommendations():
         if not mood:
             return jsonify({'error': 'Please select a mood'}), 400
 
-        # Hardcoded parameters that are guaranteed to work
-        params = {
-            'happy': {'seed_tracks': ['2LRaV8JTyAV4eVWsKPPVE2'], 'target_valence': 0.8, 'target_energy': 0.8},
-            'sad': {'seed_tracks': ['4h9wh7iJ8TZHXO81uhtqxA'], 'target_valence': 0.2, 'target_energy': 0.3}, 
-            'energetic': {'seed_tracks': ['1Je1IMUlBXcx1Fz0WE7oPT'], 'target_valence': 0.6, 'target_energy': 0.9},
-            'calm': {'seed_tracks': ['0gplL1WMoJ6iYaPgMCL0gX'], 'target_valence': 0.4, 'target_energy': 0.3},
-            'romantic': {'seed_tracks': ['4VrWlk8IQxevMvERoX08Dq'], 'target_valence': 0.6, 'target_energy': 0.5}
+        # Define search queries for each mood
+        mood_queries = {
+            'happy': 'Happy Pharrell Williams',
+            'sad': 'Someone Like You Adele',
+            'energetic': 'Uptown Funk Bruno Mars',
+            'calm': 'River Flows in You Yiruma',
+            'romantic': 'All of Me John Legend'
         }
 
-        mood_params = params.get(mood, params['happy'])
+        # Search for a track based on mood
+        query = mood_queries.get(mood, mood_queries['happy'])
+        results = sp.search(q=query, type='track', limit=1)
         
+        if not results['tracks']['items']:
+            return jsonify({'error': 'Could not find seed track'}), 500
+            
+        seed_track = results['tracks']['items'][0]['id']
+        
+        # Get recommendations using the found track
         try:
             recommendations = sp.recommendations(
-                seed_tracks=mood_params['seed_tracks'],
+                seed_tracks=[seed_track],
                 limit=20,
-                target_energy=mood_params['target_energy'],
-                target_valence=mood_params['target_valence']
+                target_energy=0.8 if mood == 'energetic' else 0.5,
+                target_valence=0.8 if mood == 'happy' else 0.5
             )
         except Exception as e:
             return jsonify({'error': f'Failed to get recommendations: {str(e)}'}), 500
