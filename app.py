@@ -41,7 +41,7 @@ def load_user(user_id):
 # Spotify Configuration
 SPOTIPY_CLIENT_ID = os.getenv('SPOTIFY_CLIENT_ID')
 SPOTIPY_CLIENT_SECRET = os.getenv('SPOTIFY_CLIENT_SECRET')
-SPOTIPY_REDIRECT_URI = os.getenv('SPOTIFY_REDIRECT_URI')
+SPOTIPY_REDIRECT_URI = 'https://mood-music-app-uwtu.onrender.com/callback'  # Hardcoding to ensure exact match
 
 mood_detector = MoodDetector()
 
