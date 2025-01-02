@@ -61,21 +61,7 @@ def create_spotify():
 
 @app.route('/')
 def index():
-    try:
-        if not all([SPOTIPY_CLIENT_ID, SPOTIPY_CLIENT_SECRET, SPOTIPY_REDIRECT_URI]):
-            logger.error("Missing Spotify credentials")
-            return render_template('index.html', error="Spotify configuration is incomplete")
-        if not session.get('token_info'):
-            return render_template('index.html', authenticated=False)
-        try:
-            sp = spotipy.Spotify(auth=session['token_info']['access_token'])
-            sp.current_user()
-            return render_template('index.html', authenticated=True)
-        except:
-            return render_template('index.html', authenticated=False)
-    except Exception as e:
-        logger.error(f"Error in index route: {str(e)}")
-        return render_template('index.html', error="An unexpected error occurred")
+    return render_template('index.html')
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -99,6 +85,7 @@ def spotify_login():
         auth_url = sp_oauth.get_authorize_url()
         return redirect(auth_url)
     except Exception as e:
+        print(f"Login error: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -123,12 +110,6 @@ def login():
 def profile():
     return render_template('profile.html', user=current_user)
 
-@app.route('/logout')
-@login_required
-def logout():
-    logout_user()
-    return redirect(url_for('index'))
-
 @app.route('/callback')
 def callback():
     try:
@@ -140,48 +121,21 @@ def callback():
         )
         
         code = request.args.get('code')
-        
-        # Get a fresh token
         token_info = sp_oauth.get_access_token(code, check_cache=False)
+        
+        # Store token info in session
         session['token_info'] = token_info
         
         return redirect('/')
         
     except Exception as e:
-        return f"Error during authentication: {str(e)}"
+        print(f"Callback error: {str(e)}")
+        return redirect('/')
 
-def get_energy_for_mood(mood):
-    """Map moods to energy levels (0.0 to 1.0)"""
-    mood_energy = {
-        'happy': 0.8,
-        'sad': 0.3,
-        'energetic': 0.9,
-        'calm': 0.2,
-        'romantic': 0.5
-    }
-    return mood_energy.get(mood.lower(), 0.5)
-
-def get_valence_for_mood(mood):
-    """Map moods to valence/positivity levels (0.0 to 1.0)"""
-    mood_valence = {
-        'happy': 0.8,
-        'sad': 0.2,
-        'energetic': 0.7,
-        'calm': 0.5,
-        'romantic': 0.6
-    }
-    return mood_valence.get(mood.lower(), 0.5)
-
-def get_genres_for_mood(mood):
-    """Map moods to Spotify genres"""
-    mood_genres = {
-        'happy': ['pop'],
-        'sad': ['acoustic'],
-        'energetic': ['dance'],
-        'calm': ['classical'],
-        'romantic': ['jazz']
-    }
-    return mood_genres.get(mood.lower(), ['pop'])
+@app.route('/logout')
+def logout():
+    session.pop('token_info', None)
+    return redirect('/')
 
 @app.route('/api/get-recommendations', methods=['POST'])
 def get_recommendations():
