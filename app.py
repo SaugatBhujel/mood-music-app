@@ -195,6 +195,28 @@ def get_recommendations():
             logger.error("No token_info in session")
             return jsonify({'error': 'Please login with Spotify first'}), 401
 
+        # Get and refresh token if needed
+        try:
+            sp_oauth = SpotifyOAuth(
+                client_id=SPOTIPY_CLIENT_ID,
+                client_secret=SPOTIPY_CLIENT_SECRET,
+                redirect_uri=SPOTIPY_REDIRECT_URI,
+                scope='user-library-read playlist-modify-public user-top-read',
+                cache_handler=None
+            )
+            
+            token_info = session.get('token_info', {})
+            if sp_oauth.is_token_expired(token_info):
+                token_info = sp_oauth.refresh_access_token(token_info['refresh_token'])
+                session['token_info'] = token_info
+                logger.debug("Token refreshed")
+                
+            sp = spotipy.Spotify(auth=token_info['access_token'])
+        except Exception as e:
+            logger.error(f"Error with Spotify auth: {str(e)}")
+            return jsonify({'error': 'Failed to authenticate with Spotify. Please login again.'}), 401
+
+        # Get the mood from request
         data = request.get_json()
         if not data:
             logger.error("No JSON data in request")
@@ -207,26 +229,18 @@ def get_recommendations():
         
         logger.debug(f"Processing mood: {mood}")
         
-        # Create Spotify client with stored token
-        token = session['token_info'].get('access_token')
-        if not token:
-            logger.error("No access token in session")
-            return jsonify({'error': 'Invalid token. Please login again.'}), 401
-            
-        sp = spotipy.Spotify(auth=token)
-        
         try:
             # Test the Spotify connection
             user = sp.current_user()
             logger.debug(f"Spotify connection test successful. User: {user['id']}")
             
-            # Get genres for the mood
-            genres = get_genres_for_mood(mood)
-            logger.debug(f"Using genres: {genres}")
+            # Get available genres from Spotify
+            available_genres = sp.recommendation_genre_seeds()
+            logger.debug(f"Available genres: {available_genres}")
             
             # Get recommendations based on genres
             recommendations = sp.recommendations(
-                seed_genres=genres[:1],  # Just use one genre to keep it simple
+                seed_genres=['pop'],  # Start with pop as a safe genre
                 limit=20,
                 target_energy=get_energy_for_mood(mood),
                 target_valence=get_valence_for_mood(mood)
