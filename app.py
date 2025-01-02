@@ -204,17 +204,26 @@ def get_recommendations():
         if not mood:
             return jsonify({'error': 'Please select a mood'}), 400
 
-        # Map moods directly to verified working genres
-        mood_to_genres = {
-            'happy': ['pop', 'dance'],
-            'sad': ['acoustic', 'ambient'],
-            'energetic': ['electronic', 'dance'],
-            'calm': ['ambient', 'classical'],
-            'romantic': ['jazz', 'soul']
+        # Map moods to search queries to find seed tracks
+        mood_to_search = {
+            'happy': 'happy upbeat',
+            'sad': 'sad emotional',
+            'energetic': 'energetic dance',
+            'calm': 'calm relaxing',
+            'romantic': 'romantic love'
         }
 
-        # Get the genres for the selected mood, default to pop if mood not found
-        selected_genres = mood_to_genres.get(mood, ['pop'])[:2]
+        search_query = mood_to_search.get(mood, 'pop')
+        
+        # Search for tracks to use as seeds
+        try:
+            search_results = sp.search(q=search_query, type='track', limit=2)
+            if not search_results['tracks']['items']:
+                return jsonify({'error': 'No seed tracks found'}), 404
+                
+            seed_tracks = [track['id'] for track in search_results['tracks']['items']]
+        except Exception as e:
+            return jsonify({'error': f'Failed to search tracks: {str(e)}'}), 500
 
         # Get mood-specific parameters
         target_energy = {
@@ -233,10 +242,10 @@ def get_recommendations():
             'romantic': 0.6
         }.get(mood, 0.5)
 
-        # Get recommendations using verified genres
+        # Get recommendations using seed tracks
         try:
             recommendations = sp.recommendations(
-                seed_genres=selected_genres,
+                seed_tracks=seed_tracks,
                 limit=20,
                 target_energy=target_energy,
                 target_valence=target_valence,
