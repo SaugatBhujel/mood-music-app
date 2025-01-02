@@ -94,7 +94,7 @@ def spotify_login():
             client_id=SPOTIPY_CLIENT_ID,
             client_secret=SPOTIPY_CLIENT_SECRET,
             redirect_uri=SPOTIPY_REDIRECT_URI,
-            scope='user-library-read playlist-modify-public user-top-read streaming'
+            scope='user-library-read playlist-modify-public user-top-read streaming user-read-email user-read-private'
         )
         auth_url = sp_oauth.get_authorize_url()
         return redirect(auth_url)
@@ -132,14 +132,14 @@ def logout():
 @app.route('/callback')
 def callback():
     try:
-        code = request.args.get('code')
-        
         sp_oauth = SpotifyOAuth(
             client_id=SPOTIPY_CLIENT_ID,
             client_secret=SPOTIPY_CLIENT_SECRET,
             redirect_uri=SPOTIPY_REDIRECT_URI,
-            scope='user-library-read playlist-modify-public user-top-read'
+            scope='user-library-read playlist-modify-public user-top-read streaming user-read-email user-read-private'
         )
+        
+        code = request.args.get('code')
         
         # Get a fresh token
         token_info = sp_oauth.get_access_token(code, check_cache=False)
@@ -204,14 +204,28 @@ def get_recommendations():
         if not mood:
             return jsonify({'error': 'Please select a mood'}), 400
 
-        # Use genre seeds instead of track seeds
-        mood_to_genres = {
-            'happy': ['pop', 'dance'],
-            'sad': ['acoustic', 'piano'],
-            'energetic': ['dance', 'electronic'],
-            'calm': ['ambient', 'classical'],
-            'romantic': ['jazz', 'soul']
+        # First, get available genres from Spotify
+        try:
+            available_genres = sp.recommendation_genre_seeds()['genres']
+        except Exception as e:
+            return jsonify({'error': f'Failed to get genres: {str(e)}'}), 500
+
+        # Map moods to genres (using only verified available genres)
+        base_genres = {
+            'happy': ['pop', 'dance', 'disco'],
+            'sad': ['piano', 'classical', 'acoustic'],
+            'energetic': ['edm', 'electro', 'dance'],
+            'calm': ['classical', 'ambient', 'piano'],
+            'romantic': ['jazz', 'soul', 'r-n-b']
         }
+
+        # Filter genres to only use available ones
+        mood_genres = [genre for genre in base_genres.get(mood, ['pop']) 
+                      if genre in available_genres][:2]
+        
+        # If no matching genres, use safe defaults
+        if not mood_genres:
+            mood_genres = ['pop']
 
         # Get mood-specific parameters
         target_energy = {
@@ -230,14 +244,14 @@ def get_recommendations():
             'romantic': 0.6
         }.get(mood, 0.5)
 
-        # Get recommendations using genres
+        # Get recommendations using verified genres
         try:
             recommendations = sp.recommendations(
-                seed_genres=mood_to_genres[mood][:2],  # Use up to 2 genres
+                seed_genres=mood_genres,
                 limit=20,
                 target_energy=target_energy,
                 target_valence=target_valence,
-                min_popularity=50  # Ensure we get relatively popular tracks
+                min_popularity=50
             )
         except Exception as e:
             return jsonify({'error': f'Failed to get recommendations: {str(e)}'}), 500
