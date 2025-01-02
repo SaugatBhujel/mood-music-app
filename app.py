@@ -204,28 +204,17 @@ def get_recommendations():
         if not mood:
             return jsonify({'error': 'Please select a mood'}), 400
 
-        # First, get available genres from Spotify
-        try:
-            available_genres = sp.recommendation_genre_seeds()['genres']
-        except Exception as e:
-            return jsonify({'error': f'Failed to get genres: {str(e)}'}), 500
-
-        # Map moods to genres (using only verified available genres)
-        base_genres = {
-            'happy': ['pop', 'dance', 'disco'],
-            'sad': ['piano', 'classical', 'acoustic'],
-            'energetic': ['edm', 'electro', 'dance'],
-            'calm': ['classical', 'ambient', 'piano'],
-            'romantic': ['jazz', 'soul', 'r-n-b']
+        # Map moods directly to verified working genres
+        mood_to_genres = {
+            'happy': ['pop', 'dance'],
+            'sad': ['acoustic', 'ambient'],
+            'energetic': ['electronic', 'dance'],
+            'calm': ['ambient', 'classical'],
+            'romantic': ['jazz', 'soul']
         }
 
-        # Filter genres to only use available ones
-        mood_genres = [genre for genre in base_genres.get(mood, ['pop']) 
-                      if genre in available_genres][:2]
-        
-        # If no matching genres, use safe defaults
-        if not mood_genres:
-            mood_genres = ['pop']
+        # Get the genres for the selected mood, default to pop if mood not found
+        selected_genres = mood_to_genres.get(mood, ['pop'])[:2]
 
         # Get mood-specific parameters
         target_energy = {
@@ -247,7 +236,7 @@ def get_recommendations():
         # Get recommendations using verified genres
         try:
             recommendations = sp.recommendations(
-                seed_genres=mood_genres,
+                seed_genres=selected_genres,
                 limit=20,
                 target_energy=target_energy,
                 target_valence=target_valence,
