@@ -195,7 +195,8 @@ def get_recommendations():
         # Basic error check
         try:
             sp.current_user()
-        except:
+        except Exception as e:
+            print(f"User check failed: {str(e)}")
             return jsonify({'error': 'Session expired. Please login again'}), 401
 
         data = request.get_json()
@@ -204,26 +205,22 @@ def get_recommendations():
         if not mood:
             return jsonify({'error': 'Please select a mood'}), 400
 
-        # Map moods to search queries to find seed tracks
-        mood_to_search = {
-            'happy': 'happy upbeat',
-            'sad': 'sad emotional',
-            'energetic': 'energetic dance',
-            'calm': 'calm relaxing',
-            'romantic': 'romantic love'
+        # Hardcoded seed tracks for each mood (verified working tracks)
+        mood_to_track = {
+            'happy': '4C6Uex2ILwJi9sZXRdmqXp',  # "Happy" by Pharrell Williams
+            'sad': '7wZUrN8oemZfsEd1CGkbXE',    # "Someone Like You" by Adele
+            'energetic': '4Cy0NHJ8Gh0xMdwyM9RkQm',  # "Levels" by Avicii
+            'calm': '7qiZfU4dY1lWllzX7mPBI3',   # "Shape of You" by Ed Sheeran
+            'romantic': '0QZ5yyl6B6utIWkxeBDxQN'  # "Perfect" by Ed Sheeran
         }
 
-        search_query = mood_to_search.get(mood, 'pop')
-        
-        # Search for tracks to use as seeds
-        try:
-            search_results = sp.search(q=search_query, type='track', limit=2)
-            if not search_results['tracks']['items']:
-                return jsonify({'error': 'No seed tracks found'}), 404
-                
-            seed_tracks = [track['id'] for track in search_results['tracks']['items']]
-        except Exception as e:
-            return jsonify({'error': f'Failed to search tracks: {str(e)}'}), 500
+        # Get the seed track for the mood
+        seed_track = mood_to_track.get(mood)
+        if not seed_track:
+            print(f"No seed track for mood: {mood}")
+            return jsonify({'error': 'Invalid mood selected'}), 400
+
+        print(f"Using seed track: {seed_track} for mood: {mood}")
 
         # Get mood-specific parameters
         target_energy = {
@@ -242,19 +239,24 @@ def get_recommendations():
             'romantic': 0.6
         }.get(mood, 0.5)
 
-        # Get recommendations using seed tracks
+        print(f"Getting recommendations with energy: {target_energy}, valence: {target_valence}")
+
+        # Get recommendations using single seed track
         try:
             recommendations = sp.recommendations(
-                seed_tracks=seed_tracks,
+                seed_tracks=[seed_track],
                 limit=20,
                 target_energy=target_energy,
                 target_valence=target_valence,
                 min_popularity=50
             )
+            print(f"Got {len(recommendations['tracks'])} recommendations")
         except Exception as e:
+            print(f"Recommendation error: {str(e)}")
             return jsonify({'error': f'Failed to get recommendations: {str(e)}'}), 500
 
         if not recommendations['tracks']:
+            print("No tracks found in recommendations")
             return jsonify({'error': 'No tracks found. Please try again.'}), 404
 
         tracks = [{
@@ -267,9 +269,11 @@ def get_recommendations():
             'external_url': track['external_urls']['spotify']
         } for track in recommendations['tracks']]
 
+        print(f"Returning {len(tracks)} tracks")
         return jsonify({'tracks': tracks, 'mood': mood})
 
     except Exception as e:
+        print(f"General error: {str(e)}")
         return jsonify({'error': f'An error occurred: {str(e)}'}), 500
 
 @app.route('/api/create-playlist', methods=['POST'])
