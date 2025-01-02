@@ -287,33 +287,68 @@ def get_recommendations():
 def create_playlist():
     try:
         if 'token_info' not in session:
-            return jsonify({'error': 'Not authenticated with Spotify'}), 401
+            return jsonify({'error': 'Please login first'}), 401
+
+        token_info = session['token_info']
+        sp = spotipy.Spotify(auth=token_info['access_token'])
+
+        # Get the current user's ID
+        try:
+            user = sp.current_user()
+            if not user:
+                return jsonify({'error': 'Could not get user info'}), 401
+            user_id = user['id']
+        except Exception as e:
+            print(f"Failed to get user: {str(e)}")
+            return jsonify({'error': 'Failed to get user info'}), 401
 
         data = request.get_json()
-        selected_tracks = data.get('tracks', [])
-        mood = data.get('mood', 'Custom')
-        
-        if not selected_tracks:
-            return jsonify({'error': 'No tracks selected'}), 400
-        
-        sp = spotipy.Spotify(auth=session['token_info']['access_token'])
-        
-        # Create playlist
-        playlist_name = f"{mood} Mood - {datetime.now().strftime('%Y-%m-%d')}"
-        user_id = sp.current_user()['id']
-        playlist = sp.user_playlist_create(user_id, playlist_name, public=False)
-        
-        # Add selected tracks to playlist
-        sp.playlist_add_items(playlist['id'], selected_tracks)
-        
+        if not data or 'tracks' not in data or 'mood' not in data:
+            return jsonify({'error': 'No tracks or mood provided'}), 400
+
+        tracks = data['tracks']
+        mood = data['mood']
+
+        if not tracks:
+            return jsonify({'error': 'No tracks provided'}), 400
+
+        # Create a new playlist
+        try:
+            playlist = sp.user_playlist_create(
+                user=user_id,
+                name=f"My {mood.title()} Mood Mix",
+                public=True,
+                description=f"A playlist for your {mood} mood, created by Mood Music"
+            )
+        except Exception as e:
+            print(f"Failed to create playlist: {str(e)}")
+            return jsonify({'error': 'Failed to create playlist'}), 500
+
+        if not playlist or 'id' not in playlist:
+            return jsonify({'error': 'Failed to create playlist'}), 500
+
+        # Add tracks to the playlist
+        try:
+            track_uris = [f"spotify:track:{track['id']}" for track in tracks if 'id' in track]
+            if track_uris:
+                sp.user_playlist_add_tracks(
+                    user=user_id,
+                    playlist_id=playlist['id'],
+                    tracks=track_uris
+                )
+        except Exception as e:
+            print(f"Failed to add tracks: {str(e)}")
+            return jsonify({'error': 'Failed to add tracks to playlist'}), 500
+
         return jsonify({
+            'success': True,
             'playlist_id': playlist['id'],
-            'playlist_url': playlist['external_urls']['spotify']
+            'playlist_url': playlist['external_urls']['spotify'] if 'external_urls' in playlist else None
         })
-        
+
     except Exception as e:
-        logger.error(f"Error creating playlist: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        print(f"General playlist error: {str(e)}")
+        return jsonify({'error': f'Failed to create playlist: {str(e)}'}), 500
 
 @app.route('/api/save-playlist', methods=['POST'])
 def save_playlist():

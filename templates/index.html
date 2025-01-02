@@ -435,19 +435,19 @@
         <div class="mood-section animate-fade-in">
             <h2 class="text-center mb-4">How are you feeling today?</h2>
             <div class="d-flex flex-wrap justify-content-center gap-3">
-                <button class="mood-button" onclick="handleQuickMood('happy')">
+                <button class="mood-button" onclick="handleMoodSelection('happy')">
                     <i class="fas fa-smile"></i> Happy
                 </button>
-                <button class="mood-button" onclick="handleQuickMood('sad')">
+                <button class="mood-button" onclick="handleMoodSelection('sad')">
                     <i class="fas fa-sad-tear"></i> Sad
                 </button>
-                <button class="mood-button" onclick="handleQuickMood('energetic')">
+                <button class="mood-button" onclick="handleMoodSelection('energetic')">
                     <i class="fas fa-bolt"></i> Energetic
                 </button>
-                <button class="mood-button" onclick="handleQuickMood('calm')">
+                <button class="mood-button" onclick="handleMoodSelection('calm')">
                     <i class="fas fa-cloud"></i> Calm
                 </button>
-                <button class="mood-button" onclick="handleQuickMood('romantic')">
+                <button class="mood-button" onclick="handleMoodSelection('romantic')">
                     <i class="fas fa-heart"></i> Romantic
                 </button>
             </div>
@@ -473,192 +473,115 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        let currentAudio = null;
-
-        function displayTracks(tracks) {
-            console.log('Displaying tracks:', tracks);
-            const recommendationsDiv = document.getElementById('recommendations');
-            recommendationsDiv.innerHTML = '';
-
-            tracks.forEach(track => {
-                const div = createTrackElement(track);
-                recommendationsDiv.appendChild(div);
-            });
-        }
-
-        function createTrackElement(track) {
-            const div = document.createElement('div');
-            div.className = 'track-card animate__animated animate__fadeIn';
-            div.dataset.trackId = track.id;
-            
-            console.log('Track preview URL:', track.preview_url);
-            
-            const previewHtml = track.preview_url ? `
-                <div class="track-preview-container">
-                    <div class="custom-audio-player" data-preview-url="${track.preview_url}">
-                        <button class="play-button" onclick="togglePlay(this)">
-                            <i class="fas fa-play"></i>
-                        </button>
-                        <div class="progress-bar" onclick="seek(event, this)">
-                            <div class="progress"></div>
-                        </div>
-                        <div class="time-display">0:00</div>
-                        <div class="volume-control">
-                            <i class="fas fa-volume-up"></i>
-                            <input type="range" class="volume-slider" min="0" max="1" step="0.1" value="1" 
-                                onchange="updateVolume(this)">
-                        </div>
-                    </div>
-                </div>
-            ` : `
-                <div class="no-preview-message">
-                    <i class="fas fa-music-slash"></i>
-                    No preview available for this track
-                </div>
-            `;
-
-            div.innerHTML = `
-                <img src="${track.album_image || 'path/to/default-image.jpg'}" alt="${track.name}" class="track-image">
-                <div class="track-info">
-                    <h3>${track.name}</h3>
-                    <p>${track.artist}</p>
-                    <p class="album-name">${track.album}</p>
-                </div>
-                ${previewHtml}
-                <div class="track-actions">
-                    <a href="${track.external_url}" target="_blank" class="spotify-link">
-                        <i class="fab fa-spotify"></i> Open in Spotify
-                    </a>
-                </div>
-            `;
-            return div;
-        }
-
-        function handleQuickMood(mood) {
-            console.log('Selected mood:', mood);
-            const recommendationsDiv = document.getElementById('recommendations');
-            recommendationsDiv.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i> Finding the perfect tracks for your mood...</div>';
-            
-            console.log('Sending request to /api/get-recommendations');
-            
-            fetch('/api/get-recommendations', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    mood: mood
-                })
-            })
-            .then(response => {
-                console.log('Response received:', response);
-                return response.json().then(data => {
-                    console.log('Response data:', data);
-                    if (!response.ok) {
-                        throw new Error(data.error || 'Failed to get recommendations');
-                    }
-                    return data;
+        async function createPlaylist(tracks, mood) {
+            try {
+                const response = await fetch('/api/create-playlist', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ tracks: tracks, mood: mood })
                 });
-            })
-            .then(data => {
-                console.log('Processing tracks:', data.tracks);
+
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to create playlist');
+                }
+
+                if (data.playlist_url) {
+                    window.open(data.playlist_url, '_blank');
+                }
+                
+                return data;
+            } catch (error) {
+                console.error('Error creating playlist:', error);
+                alert(error.message);
+                throw error;
+            }
+        }
+
+        async function handleMoodSelection(mood) {
+            try {
+                // Show loading state
+                document.getElementById('recommendations').innerHTML = '<p>Loading recommendations...</p>';
+                
+                const response = await fetch('/api/get-recommendations', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ mood: mood })
+                });
+
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to get recommendations');
+                }
+
+                // Clear previous recommendations
+                const recommendationsDiv = document.getElementById('recommendations');
+                recommendationsDiv.innerHTML = '';
+
                 if (!data.tracks || data.tracks.length === 0) {
-                    throw new Error('No tracks found for this mood. Please try a different mood.');
+                    recommendationsDiv.innerHTML = '<p>No recommendations found</p>';
+                    return;
                 }
-                displayTracks(data.tracks);
-            })
-            .catch(error => {
+
+                // Create container for recommendations
+                const container = document.createElement('div');
+                container.className = 'recommendations-container';
+
+                // Add tracks
+                data.tracks.forEach(track => {
+                    const trackDiv = document.createElement('div');
+                    trackDiv.className = 'track-item';
+                    
+                    const albumArt = track.album_image || 'default-album-art.jpg';
+                    
+                    trackDiv.innerHTML = `
+                        <img src="${albumArt}" alt="${track.name}" class="album-art">
+                        <div class="track-info">
+                            <h3>${track.name}</h3>
+                            <p>${track.artist}</p>
+                            ${track.preview_url ? 
+                                `<audio controls>
+                                    <source src="${track.preview_url}" type="audio/mpeg">
+                                </audio>` : 
+                                '<p>No preview available</p>'
+                            }
+                            <a href="${track.external_url}" target="_blank" class="spotify-link">Open in Spotify</a>
+                        </div>
+                    `;
+                    container.appendChild(trackDiv);
+                });
+
+                // Add create playlist button
+                const createPlaylistBtn = document.createElement('button');
+                createPlaylistBtn.textContent = 'Create Playlist';
+                createPlaylistBtn.className = 'create-playlist-btn';
+                createPlaylistBtn.onclick = async () => {
+                    try {
+                        createPlaylistBtn.disabled = true;
+                        createPlaylistBtn.textContent = 'Creating playlist...';
+                        await createPlaylist(data.tracks, mood);
+                        alert('Playlist created successfully!');
+                    } catch (error) {
+                        console.error('Failed to create playlist:', error);
+                    } finally {
+                        createPlaylistBtn.disabled = false;
+                        createPlaylistBtn.textContent = 'Create Playlist';
+                    }
+                };
+
+                recommendationsDiv.appendChild(container);
+                recommendationsDiv.appendChild(createPlaylistBtn);
+
+            } catch (error) {
                 console.error('Error:', error);
-                recommendationsDiv.innerHTML = `
-                    <div class="error-message">
-                        <i class="fas fa-exclamation-circle"></i>
-                        <p>${error.message}</p>
-                        ${error.message.includes('login') ? 
-                            '<button onclick="window.location.href=\'/spotify-login\'" class="login-button">Login with Spotify</button>' : 
-                            '<button onclick="handleQuickMood(\'' + mood + '\')" class="retry-button">Try Again</button>'}
-                    </div>
-                `;
-            });
-        }
-
-        function togglePlay(button) {
-            const player = button.closest('.custom-audio-player');
-            const icon = button.querySelector('i');
-            const previewUrl = player.dataset.previewUrl;
-            
-            if (currentAudio && currentAudio.player !== player) {
-                // Stop other playing audio
-                const otherIcon = currentAudio.player.querySelector('.play-button i');
-                otherIcon.className = 'fas fa-play';
-                currentAudio.audio.pause();
-                currentAudio = null;
+                document.getElementById('recommendations').innerHTML = `<p class="error">Error: ${error.message}</p>`;
             }
-            
-            if (!currentAudio) {
-                // Start playing new audio
-                const audio = new Audio(previewUrl);
-                const progressBar = player.querySelector('.progress');
-                const timeDisplay = player.querySelector('.time-display');
-                
-                audio.addEventListener('timeupdate', () => {
-                    const progress = (audio.currentTime / audio.duration) * 100;
-                    progressBar.style.width = progress + '%';
-                    timeDisplay.textContent = formatTime(audio.currentTime);
-                });
-                
-                audio.addEventListener('ended', () => {
-                    icon.className = 'fas fa-play';
-                    currentAudio = null;
-                });
-                
-                audio.play();
-                currentAudio = { audio, player };
-                icon.className = 'fas fa-pause';
-            } else {
-                // Toggle existing audio
-                if (currentAudio.audio.paused) {
-                    currentAudio.audio.play();
-                    icon.className = 'fas fa-pause';
-                } else {
-                    currentAudio.audio.pause();
-                    icon.className = 'fas fa-play';
-                }
-            }
-        }
-
-        function seek(event, progressBar) {
-            if (currentAudio && currentAudio.player === progressBar.closest('.custom-audio-player')) {
-                const rect = progressBar.getBoundingClientRect();
-                const x = event.clientX - rect.left;
-                const percentage = x / rect.width;
-                currentAudio.audio.currentTime = percentage * currentAudio.audio.duration;
-            }
-        }
-
-        function updateVolume(slider) {
-            if (currentAudio) {
-                currentAudio.audio.volume = slider.value;
-            }
-        }
-
-        function formatTime(seconds) {
-            const minutes = Math.floor(seconds / 60);
-            seconds = Math.floor(seconds % 60);
-            return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-        }
-
-        function showAlert(message, type = 'success') {
-            const alertDiv = document.createElement('div');
-            alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3`;
-            alertDiv.innerHTML = `
-                ${message}
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            `;
-            document.body.appendChild(alertDiv);
-            
-            setTimeout(() => {
-                alertDiv.style.display = 'none';
-            }, 5000);
         }
     </script>
 </body>
