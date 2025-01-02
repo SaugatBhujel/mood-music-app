@@ -205,22 +205,24 @@ def get_recommendations():
         if not mood:
             return jsonify({'error': 'Please select a mood'}), 400
 
-        # Hardcoded seed tracks for each mood (verified working tracks)
-        mood_to_track = {
-            'happy': '4C6Uex2ILwJi9sZXRdmqXp',  # "Happy" by Pharrell Williams
-            'sad': '7wZUrN8oemZfsEd1CGkbXE',    # "Someone Like You" by Adele
-            'energetic': '4Cy0NHJ8Gh0xMdwyM9RkQm',  # "Levels" by Avicii
-            'calm': '7qiZfU4dY1lWllzX7mPBI3',   # "Shape of You" by Ed Sheeran
-            'romantic': '0QZ5yyl6B6utIWkxeBDxQN'  # "Perfect" by Ed Sheeran
-        }
-
-        # Get the seed track for the mood
-        seed_track = mood_to_track.get(mood)
-        if not seed_track:
-            print(f"No seed track for mood: {mood}")
-            return jsonify({'error': 'Invalid mood selected'}), 400
-
-        print(f"Using seed track: {seed_track} for mood: {mood}")
+        # Get tracks from Spotify's Top 50 Global playlist
+        try:
+            playlist_tracks = sp.playlist_tracks('37i9dQZEVXbMDoHDwVN2tF', limit=50)
+            if not playlist_tracks['items']:
+                return jsonify({'error': 'Could not fetch playlist tracks'}), 500
+                
+            # Get track IDs from the playlist
+            all_tracks = [item['track']['id'] for item in playlist_tracks['items'] if item['track']]
+            
+            # Take first track as seed
+            seed_track = all_tracks[0] if all_tracks else None
+            
+            if not seed_track:
+                return jsonify({'error': 'No valid tracks found in playlist'}), 500
+                
+        except Exception as e:
+            print(f"Failed to get playlist tracks: {str(e)}")
+            return jsonify({'error': 'Failed to get playlist tracks'}), 500
 
         # Get mood-specific parameters
         target_energy = {
@@ -239,9 +241,7 @@ def get_recommendations():
             'romantic': 0.6
         }.get(mood, 0.5)
 
-        print(f"Getting recommendations with energy: {target_energy}, valence: {target_valence}")
-
-        # Get recommendations using single seed track
+        # Get recommendations using top track as seed
         try:
             recommendations = sp.recommendations(
                 seed_tracks=[seed_track],
@@ -250,26 +250,33 @@ def get_recommendations():
                 target_valence=target_valence,
                 min_popularity=50
             )
-            print(f"Got {len(recommendations['tracks'])} recommendations")
         except Exception as e:
             print(f"Recommendation error: {str(e)}")
             return jsonify({'error': f'Failed to get recommendations: {str(e)}'}), 500
 
         if not recommendations['tracks']:
-            print("No tracks found in recommendations")
             return jsonify({'error': 'No tracks found. Please try again.'}), 404
 
-        tracks = [{
-            'id': track['id'],
-            'name': track['name'],
-            'artist': track['artists'][0]['name'],
-            'album': track['album']['name'],
-            'album_image': track['album']['images'][0]['url'] if track['album']['images'] else None,
-            'preview_url': track['preview_url'],
-            'external_url': track['external_urls']['spotify']
-        } for track in recommendations['tracks']]
+        tracks = []
+        for track in recommendations['tracks']:
+            try:
+                track_data = {
+                    'id': track['id'],
+                    'name': track['name'],
+                    'artist': track['artists'][0]['name'] if track['artists'] else 'Unknown Artist',
+                    'album': track['album']['name'] if track['album'] else 'Unknown Album',
+                    'album_image': track['album']['images'][0]['url'] if track['album'].get('images') else None,
+                    'preview_url': track['preview_url'],
+                    'external_url': track['external_urls'].get('spotify', '')
+                }
+                tracks.append(track_data)
+            except Exception as e:
+                print(f"Error processing track: {str(e)}")
+                continue
 
-        print(f"Returning {len(tracks)} tracks")
+        if not tracks:
+            return jsonify({'error': 'Failed to process tracks'}), 500
+
         return jsonify({'tracks': tracks, 'mood': mood})
 
     except Exception as e:
