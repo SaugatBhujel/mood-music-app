@@ -45,18 +45,34 @@ SPOTIPY_REDIRECT_URI = 'https://mood-music-app-uwtu.onrender.com/callback'  # Ha
 
 mood_detector = MoodDetector()
 
-def create_spotify():
+def get_spotify():
+    """Get Spotify client with fresh token"""
     try:
-        auth_manager = SpotifyOAuth(
-            client_id=SPOTIPY_CLIENT_ID,
-            client_secret=SPOTIPY_CLIENT_SECRET,
-            redirect_uri=SPOTIPY_REDIRECT_URI,
-            scope='playlist-modify-public playlist-modify-private user-read-private',
-            cache_handler=None
-        )
-        return spotipy.Spotify(auth_manager=auth_manager)
+        if 'token_info' not in session:
+            print("No token in session")
+            return None
+
+        token_info = session['token_info']
+
+        # Check if token needs refresh
+        now = int(time.time())
+        is_expired = token_info['expires_at'] - now < 60
+
+        if is_expired:
+            print("Token expired, refreshing...")
+            sp_oauth = SpotifyOAuth(
+                client_id=SPOTIPY_CLIENT_ID,
+                client_secret=SPOTIPY_CLIENT_SECRET,
+                redirect_uri=SPOTIPY_REDIRECT_URI,
+                scope='user-library-read playlist-modify-public user-top-read streaming user-read-email user-read-private'
+            )
+            token_info = sp_oauth.refresh_access_token(token_info['refresh_token'])
+            session['token_info'] = token_info
+
+        return spotipy.Spotify(auth=token_info['access_token'])
+
     except Exception as e:
-        logger.error(f"Error creating Spotify client: {str(e)}")
+        print(f"Error getting Spotify client: {str(e)}")
         return None
 
 @app.route('/')
@@ -140,19 +156,9 @@ def logout():
 @app.route('/api/get-recommendations', methods=['POST'])
 def get_recommendations():
     try:
-        if 'token_info' not in session:
-            print("No token in session")
+        sp = get_spotify()
+        if not sp:
             return jsonify({'error': 'Please login first'}), 401
-
-        token_info = session['token_info']
-        sp = spotipy.Spotify(auth=token_info['access_token'])
-
-        # Basic error check
-        try:
-            sp.current_user()
-        except Exception as e:
-            print(f"User check failed: {str(e)}")
-            return jsonify({'error': 'Session expired. Please login again'}), 401
 
         data = request.get_json()
         mood = data.get('mood', '').lower() if data else None
@@ -230,11 +236,9 @@ def get_recommendations():
 @app.route('/api/create-playlist', methods=['POST'])
 def create_playlist():
     try:
-        if 'token_info' not in session:
+        sp = get_spotify()
+        if not sp:
             return jsonify({'error': 'Please login first'}), 401
-
-        token_info = session['token_info']
-        sp = spotipy.Spotify(auth=token_info['access_token'])
 
         # Get the current user's ID
         try:
@@ -297,7 +301,10 @@ def create_playlist():
 @app.route('/api/save-playlist', methods=['POST'])
 def save_playlist():
     try:
-        sp = create_spotify()
+        sp = get_spotify()
+        if not sp:
+            return jsonify({'error': 'Please login first'}), 401
+
         user = sp.current_user()
         user_id = user['id']
         
