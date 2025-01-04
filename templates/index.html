@@ -407,6 +407,58 @@
                 font-size: 1.1rem;
             }
         }
+        
+        .mood-button {
+            padding: 1rem 2rem;
+            border: none;
+            border-radius: 50px;
+            background: linear-gradient(145deg, #1DB954, #1ed760);
+            color: white;
+            font-size: 1.1rem;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(29, 185, 84, 0.3);
+        }
+
+        .mood-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(29, 185, 84, 0.4);
+        }
+
+        .mood-button:active {
+            transform: translateY(1px);
+        }
+
+        .mood-button i {
+            margin-right: 8px;
+        }
+
+        .nav-pills .nav-link {
+            color: #1DB954;
+            border: 2px solid #1DB954;
+            margin: 0 5px;
+            padding: 10px 20px;
+            border-radius: 25px;
+        }
+
+        .nav-pills .nav-link.active {
+            background-color: #1DB954;
+            color: white;
+        }
+
+        .card {
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .recommendations-grid {
+            opacity: 0;
+            animation: fadeIn 0.5s ease forwards;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
     </style>
 </head>
 <body>
@@ -414,7 +466,7 @@
         <div class="row justify-content-center">
             <div class="col-md-8 text-center">
                 <h1 class="display-4 mb-4">Welcome to Mood Music</h1>
-                <p class="lead mb-4">Search for songs and create your perfect playlist</p>
+                <p class="lead mb-4">Get recommendations by mood or search for your favorite songs</p>
                 
                 <!-- Login Section -->
                 {% if not session.get('token_info') %}
@@ -422,33 +474,76 @@
                     <a href="/spotify-login" class="btn btn-success btn-lg px-4 py-3">
                         <i class="fab fa-spotify me-2"></i>Login with Spotify
                     </a>
-                    <p class="mt-3 text-muted">Please login to search songs and create playlists</p>
+                    <p class="mt-3 text-muted">Please login to get started</p>
                 </div>
                 {% endif %}
 
-                <!-- Search Section (Only show if logged in) -->
                 {% if session.get('token_info') %}
-                <div class="search-section animate-fade-in">
-                    <div class="input-group mb-4">
-                        <input type="text" id="searchInput" class="form-control form-control-lg" placeholder="Search for songs...">
-                        <button class="btn btn-primary" type="button" onclick="handleSearch()">
-                            <i class="fas fa-search"></i> Search
+                <!-- Tabs for Mood/Search -->
+                <ul class="nav nav-pills mb-4 justify-content-center" id="musicTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="mood-tab" data-bs-toggle="pill" data-bs-target="#mood" type="button">
+                            <i class="fas fa-heart me-2"></i>Mood
                         </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="search-tab" data-bs-toggle="pill" data-bs-target="#search" type="button">
+                            <i class="fas fa-search me-2"></i>Search
+                        </button>
+                    </li>
+                </ul>
+
+                <!-- Tab Content -->
+                <div class="tab-content" id="musicTabsContent">
+                    <!-- Mood Tab -->
+                    <div class="tab-pane fade show active" id="mood" role="tabpanel">
+                        <div class="mood-section animate-fade-in">
+                            <h2 class="text-center mb-4">How are you feeling today?</h2>
+                            <div class="d-flex flex-wrap justify-content-center gap-3">
+                                <button class="mood-button" onclick="handleMoodSelection('happy')" data-mood="happy">
+                                    <i class="fas fa-smile"></i> Happy
+                                </button>
+                                <button class="mood-button" onclick="handleMoodSelection('sad')" data-mood="sad">
+                                    <i class="fas fa-sad-tear"></i> Sad
+                                </button>
+                                <button class="mood-button" onclick="handleMoodSelection('energetic')" data-mood="energetic">
+                                    <i class="fas fa-bolt"></i> Energetic
+                                </button>
+                                <button class="mood-button" onclick="handleMoodSelection('calm')" data-mood="calm">
+                                    <i class="fas fa-cloud"></i> Calm
+                                </button>
+                                <button class="mood-button" onclick="handleMoodSelection('romantic')" data-mood="romantic">
+                                    <i class="fas fa-heart"></i> Romantic
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Search Tab -->
+                    <div class="tab-pane fade" id="search" role="tabpanel">
+                        <div class="search-section animate-fade-in">
+                            <div class="input-group mb-4">
+                                <input type="text" id="searchInput" class="form-control form-control-lg" placeholder="Search for songs...">
+                                <button class="btn btn-primary" type="button" onclick="handleSearch()">
+                                    <i class="fas fa-search"></i> Search
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 {% else %}
                 <div class="alert alert-info">
-                    <i class="fas fa-info-circle me-2"></i>Please login with Spotify to search songs
+                    <i class="fas fa-info-circle me-2"></i>Please login with Spotify to continue
                 </div>
                 {% endif %}
             </div>
         </div>
         
-        <!-- Search Results Section -->
+        <!-- Results Section -->
         {% if session.get('token_info') %}
         <div class="row mt-4">
             <div class="col-12">
-                <div id="searchResults" class="recommendations-grid">
+                <div id="resultsArea" class="recommendations-grid">
                     <!-- Results will be loaded here -->
                 </div>
             </div>
@@ -539,7 +634,7 @@
                 return response.json();
             })
             .then(data => {
-                const resultsDiv = document.getElementById('searchResults');
+                const resultsDiv = document.getElementById('resultsArea');
                 resultsDiv.innerHTML = '';
                 
                 if (!data.tracks || data.tracks.length === 0) {
@@ -731,6 +826,78 @@
             };
             
             currentPlayingAudio = audio;
+        }
+        
+        function handleMoodSelection(mood) {
+            // Show loading state
+            const moodButton = document.querySelector(`button[data-mood="${mood}"]`);
+            moodButton.disabled = true;
+            moodButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
+            
+            fetch('/api/recommendations', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ mood: mood })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => {
+                        throw new Error(err.error || 'Failed to get recommendations');
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                const resultsDiv = document.getElementById('resultsArea');
+                resultsDiv.innerHTML = '';
+                
+                if (!data.tracks || data.tracks.length === 0) {
+                    resultsDiv.innerHTML = '<p class="text-center">No results found</p>';
+                    return;
+                }
+
+                // Create grid for tracks
+                const grid = document.createElement('div');
+                grid.className = 'row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4';
+                
+                data.tracks.forEach(track => {
+                    const col = document.createElement('div');
+                    col.className = 'col';
+                    col.innerHTML = `
+                        <div class="card h-100">
+                            <img src="${track.album_image || 'https://via.placeholder.com/300'}" class="card-img-top" alt="${track.name}">
+                            <div class="card-body">
+                                <h5 class="card-title">${track.name}</h5>
+                                <p class="card-text">
+                                    Artist: ${track.artist}<br>
+                                    Album: ${track.album}
+                                </p>
+                                ${track.preview_url ? `
+                                    <button class="btn btn-primary btn-sm me-2" onclick="playPreview('${track.preview_url}', this)">
+                                        <i class="fas fa-play"></i> Preview
+                                    </button>
+                                ` : ''}
+                                <button class="btn ${selectedTracks.has(track.id) ? 'btn-danger' : 'btn-success'} btn-sm" 
+                                        onclick="toggleTrack('${track.id}', '${track.name}', '${track.artist}')">
+                                    <i class="fas ${selectedTracks.has(track.id) ? 'fa-minus' : 'fa-plus'}"></i> 
+                                    ${selectedTracks.has(track.id) ? 'Remove' : 'Add'}
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    grid.appendChild(col);
+                });
+                
+                resultsDiv.appendChild(grid);
+                moodButton.disabled = false;
+                moodButton.innerHTML = `<i class="fas fa-${mood === 'happy' ? 'smile' : mood === 'sad' ? 'sad-tear' : mood === 'energetic' ? 'bolt' : mood === 'calm' ? 'cloud' : 'heart'}"></i> ${mood.charAt(0).toUpperCase() + mood.slice(1)}`;
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showAlert(error.message);
+            });
         }
     </script>
 </body>

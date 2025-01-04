@@ -283,6 +283,84 @@ def get_recommendations():
         print(f"General error in get_recommendations: {str(e)}")
         return jsonify({'error': f'An error occurred: {str(e)}'}), 500
 
+@app.route('/api/recommendations', methods=['POST'])
+def get_recommendations():
+    try:
+        if 'token_info' not in session:
+            print("No token in session")
+            return jsonify({'error': 'Please login first'}), 401
+
+        token_info = session['token_info']
+        if not token_info:
+            print("Token info is empty")
+            return jsonify({'error': 'Invalid session, please login again'}), 401
+
+        sp = spotipy.Spotify(auth=token_info['access_token'])
+        
+        # Verify the token works
+        try:
+            sp.current_user()
+        except Exception as e:
+            print(f"Token verification failed: {str(e)}")
+            session.pop('token_info', None)
+            return jsonify({'error': 'Session expired, please login again'}), 401
+
+        data = request.get_json()
+        if not data or 'mood' not in data:
+            return jsonify({'error': 'No mood provided'}), 400
+
+        mood = data['mood'].lower()
+        print(f"Getting recommendations for mood: {mood}")
+
+        # Map moods to audio features
+        mood_features = {
+            'happy': {'valence': 0.8, 'energy': 0.7, 'danceability': 0.7},
+            'sad': {'valence': 0.2, 'energy': 0.3, 'danceability': 0.4},
+            'energetic': {'valence': 0.6, 'energy': 0.9, 'danceability': 0.8},
+            'calm': {'valence': 0.4, 'energy': 0.2, 'danceability': 0.3},
+            'romantic': {'valence': 0.6, 'energy': 0.4, 'danceability': 0.5}
+        }
+
+        if mood not in mood_features:
+            return jsonify({'error': 'Invalid mood'}), 400
+
+        # Get recommendations based on mood
+        recommendations = sp.recommendations(
+            seed_genres=['pop', 'rock', 'indie', 'electronic'],
+            limit=20,
+            **mood_features[mood]
+        )
+
+        if not recommendations or 'tracks' not in recommendations:
+            return jsonify({'error': 'No recommendations found'}), 404
+
+        tracks = []
+        for track in recommendations['tracks']:
+            try:
+                track_data = {
+                    'id': track['id'],
+                    'name': track['name'],
+                    'artist': track['artists'][0]['name'] if track['artists'] else 'Unknown Artist',
+                    'album': track['album']['name'] if track['album'] else 'Unknown Album',
+                    'album_image': track['album']['images'][0]['url'] if track['album'].get('images') else None,
+                    'preview_url': track['preview_url'],
+                    'external_url': track['external_urls'].get('spotify', '')
+                }
+                tracks.append(track_data)
+                print(f"Found track: {track_data['name']}")
+            except Exception as e:
+                print(f"Error processing track: {str(e)}")
+                continue
+
+        return jsonify({
+            'tracks': tracks,
+            'message': f'Found {len(tracks)} tracks for {mood} mood'
+        })
+
+    except Exception as e:
+        print(f"Recommendations error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/search', methods=['POST'])
 def search_tracks():
     try:
