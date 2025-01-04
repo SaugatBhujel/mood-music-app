@@ -283,70 +283,123 @@ def get_recommendations():
         print(f"General error in get_recommendations: {str(e)}")
         return jsonify({'error': f'An error occurred: {str(e)}'}), 500
 
+@app.route('/api/search', methods=['POST'])
+def search_tracks():
+    try:
+        if 'token_info' not in session:
+            print("No token in session")
+            return jsonify({'error': 'Please login first'}), 401
+
+        token_info = session['token_info']
+        if not token_info:
+            print("Token info is empty")
+            return jsonify({'error': 'Invalid session, please login again'}), 401
+
+        sp = spotipy.Spotify(auth=token_info['access_token'])
+        
+        # Verify the token works
+        try:
+            sp.current_user()
+        except Exception as e:
+            print(f"Token verification failed: {str(e)}")
+            session.pop('token_info', None)
+            return jsonify({'error': 'Session expired, please login again'}), 401
+
+        data = request.get_json()
+        if not data or 'query' not in data:
+            return jsonify({'error': 'No search query provided'}), 400
+
+        query = data['query']
+        print(f"Searching for: {query}")
+
+        # Search for tracks
+        results = sp.search(q=query, type='track', limit=20)
+        
+        if not results or 'tracks' not in results:
+            return jsonify({'error': 'No results found'}), 404
+
+        tracks = []
+        for track in results['tracks']['items']:
+            try:
+                track_data = {
+                    'id': track['id'],
+                    'name': track['name'],
+                    'artist': track['artists'][0]['name'] if track['artists'] else 'Unknown Artist',
+                    'album': track['album']['name'] if track['album'] else 'Unknown Album',
+                    'album_image': track['album']['images'][0]['url'] if track['album'].get('images') else None,
+                    'preview_url': track['preview_url'],
+                    'external_url': track['external_urls'].get('spotify', '')
+                }
+                tracks.append(track_data)
+                print(f"Found track: {track_data['name']}")
+            except Exception as e:
+                print(f"Error processing track: {str(e)}")
+                continue
+
+        return jsonify({
+            'tracks': tracks,
+            'message': f'Found {len(tracks)} tracks'
+        })
+
+    except Exception as e:
+        print(f"Search error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/create-playlist', methods=['POST'])
 def create_playlist():
     try:
-        sp = get_spotify()
-        if not sp:
+        if 'token_info' not in session:
             return jsonify({'error': 'Please login first'}), 401
 
-        # Get the current user's ID
+        token_info = session['token_info']
+        sp = spotipy.Spotify(auth=token_info['access_token'])
+
+        data = request.get_json()
+        if not data or 'name' not in data or 'tracks' not in data:
+            return jsonify({'error': 'Missing playlist name or tracks'}), 400
+
+        playlist_name = data['name']
+        track_uris = data['tracks']
+
+        if not track_uris:
+            return jsonify({'error': 'No tracks selected'}), 400
+
+        # Get user ID
         try:
             user = sp.current_user()
-            if not user:
-                return jsonify({'error': 'Could not get user info'}), 401
             user_id = user['id']
         except Exception as e:
             print(f"Failed to get user: {str(e)}")
-            return jsonify({'error': 'Failed to get user info'}), 401
+            return jsonify({'error': 'Failed to get user info'}), 500
 
-        data = request.get_json()
-        if not data or 'tracks' not in data or 'mood' not in data:
-            return jsonify({'error': 'No tracks or mood provided'}), 400
-
-        tracks = data['tracks']
-        mood = data['mood']
-
-        if not tracks:
-            return jsonify({'error': 'No tracks provided'}), 400
-
-        # Create a new playlist
+        # Create playlist
         try:
             playlist = sp.user_playlist_create(
                 user=user_id,
-                name=f"My {mood.title()} Mood Mix",
+                name=playlist_name,
                 public=True,
-                description=f"A playlist for your {mood} mood, created by Mood Music"
+                description=f'Created with Mood Music App'
             )
         except Exception as e:
             print(f"Failed to create playlist: {str(e)}")
             return jsonify({'error': 'Failed to create playlist'}), 500
 
-        if not playlist or 'id' not in playlist:
-            return jsonify({'error': 'Failed to create playlist'}), 500
-
-        # Add tracks to the playlist
+        # Add tracks to playlist
         try:
-            track_uris = [f"spotify:track:{track['id']}" for track in tracks if 'id' in track]
-            if track_uris:
-                sp.user_playlist_add_tracks(
-                    user=user_id,
-                    playlist_id=playlist['id'],
-                    tracks=track_uris
-                )
+            sp.playlist_add_items(playlist['id'], track_uris)
         except Exception as e:
             print(f"Failed to add tracks: {str(e)}")
             return jsonify({'error': 'Failed to add tracks to playlist'}), 500
 
         return jsonify({
             'success': True,
-            'playlist_id': playlist['id'],
-            'playlist_url': playlist['external_urls']['spotify'] if 'external_urls' in playlist else None
+            'message': 'Playlist created successfully!',
+            'playlist_url': playlist['external_urls']['spotify']
         })
 
     except Exception as e:
-        print(f"General playlist error: {str(e)}")
-        return jsonify({'error': f'Failed to create playlist: {str(e)}'}), 500
+        print(f"Create playlist error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/save-playlist', methods=['POST'])
 def save_playlist():

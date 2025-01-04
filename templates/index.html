@@ -414,7 +414,7 @@
         <div class="row justify-content-center">
             <div class="col-md-8 text-center">
                 <h1 class="display-4 mb-4">Welcome to Mood Music</h1>
-                <p class="lead mb-4">Get personalized music recommendations based on your mood</p>
+                <p class="lead mb-4">Search for songs and create your perfect playlist</p>
                 
                 <!-- Login Section -->
                 {% if not session.get('token_info') %}
@@ -422,52 +422,60 @@
                     <a href="/spotify-login" class="btn btn-success btn-lg px-4 py-3">
                         <i class="fab fa-spotify me-2"></i>Login with Spotify
                     </a>
-                    <p class="mt-3 text-muted">Please login to get personalized recommendations</p>
+                    <p class="mt-3 text-muted">Please login to search songs and create playlists</p>
                 </div>
                 {% endif %}
 
-                <!-- Mood Selection (Only show if logged in) -->
+                <!-- Search Section (Only show if logged in) -->
                 {% if session.get('token_info') %}
-                <div class="mood-section animate-fade-in">
-                    <h2 class="text-center mb-4">How are you feeling today?</h2>
-                    <div class="d-flex flex-wrap justify-content-center gap-3">
-                        <button class="mood-button" onclick="handleMoodSelection('happy')" data-mood="happy">
-                            <i class="fas fa-smile"></i> Happy
-                        </button>
-                        <button class="mood-button" onclick="handleMoodSelection('sad')" data-mood="sad">
-                            <i class="fas fa-sad-tear"></i> Sad
-                        </button>
-                        <button class="mood-button" onclick="handleMoodSelection('energetic')" data-mood="energetic">
-                            <i class="fas fa-bolt"></i> Energetic
-                        </button>
-                        <button class="mood-button" onclick="handleMoodSelection('calm')" data-mood="calm">
-                            <i class="fas fa-cloud"></i> Calm
-                        </button>
-                        <button class="mood-button" onclick="handleMoodSelection('romantic')" data-mood="romantic">
-                            <i class="fas fa-heart"></i> Romantic
+                <div class="search-section animate-fade-in">
+                    <div class="input-group mb-4">
+                        <input type="text" id="searchInput" class="form-control form-control-lg" placeholder="Search for songs...">
+                        <button class="btn btn-primary" type="button" onclick="handleSearch()">
+                            <i class="fas fa-search"></i> Search
                         </button>
                     </div>
                 </div>
                 {% else %}
                 <div class="alert alert-info">
-                    <i class="fas fa-info-circle me-2"></i>Please login with Spotify to get music recommendations
+                    <i class="fas fa-info-circle me-2"></i>Please login with Spotify to search songs
                 </div>
                 {% endif %}
             </div>
         </div>
         
-        <!-- Recommendations Section (Only show if logged in) -->
+        <!-- Search Results Section -->
         {% if session.get('token_info') %}
-        <div class="row mt-5">
+        <div class="row mt-4">
             <div class="col-12">
-                <div id="recommendations" class="recommendations-grid">
-                    <!-- Recommendations will be loaded here -->
+                <div id="searchResults" class="recommendations-grid">
+                    <!-- Results will be loaded here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Selected Tracks Section -->
+        <div class="row mt-4" id="selectedTracksSection" style="display: none;">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Selected Songs</h5>
+                        <div id="selectedTracks" class="list-group">
+                            <!-- Selected tracks will be added here -->
+                        </div>
+                        <div class="mt-3">
+                            <input type="text" id="playlistName" class="form-control mb-2" placeholder="Enter playlist name">
+                            <button class="btn btn-success" onclick="createPlaylist()">
+                                <i class="fas fa-plus"></i> Create Playlist
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
         {% endif %}
 
-        <!-- Logout Button (Only show if logged in) -->
+        <!-- Logout Button -->
         {% if session.get('token_info') %}
         <div class="row mt-4">
             <div class="col-12 text-center">
@@ -481,7 +489,8 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        let currentPlayingAudio = null;
+        let selectedTracks = new Set();
+        let searchTimeout;
 
         function showAlert(message, type = 'danger') {
             // Remove any existing alerts
@@ -501,45 +510,43 @@
             }, 5000);
         }
 
-        function handleMoodSelection(mood) {
-            // Disable all mood buttons and show loading state
-            const buttons = document.querySelectorAll('.mood-button');
-            buttons.forEach(btn => {
-                btn.disabled = true;
-                if (btn.getAttribute('data-mood') === mood) {
-                    btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Loading...`;
-                }
-            });
+        function handleSearch() {
+            const searchInput = document.getElementById('searchInput');
+            const query = searchInput.value.trim();
             
-            // Show loading message
-            showAlert('Getting your personalized recommendations...', 'info');
+            if (!query) {
+                showAlert('Please enter a search term');
+                return;
+            }
 
-            fetch('/api/get-recommendations', {
+            // Show loading state
+            searchInput.disabled = true;
+            showAlert('Searching...', 'info');
+
+            fetch('/api/search', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ mood: mood })
+                body: JSON.stringify({ query: query })
             })
             .then(response => {
                 if (!response.ok) {
                     return response.json().then(err => {
-                        throw new Error(err.error || 'Failed to get recommendations');
+                        throw new Error(err.error || 'Search failed');
                     });
                 }
                 return response.json();
             })
             .then(data => {
-                // Clear previous recommendations
-                const recommendationsDiv = document.getElementById('recommendations');
-                recommendationsDiv.innerHTML = '';
+                const resultsDiv = document.getElementById('searchResults');
+                resultsDiv.innerHTML = '';
                 
-                // Add header
-                const header = document.createElement('h3');
-                header.className = 'text-center mb-4';
-                header.textContent = `${mood.charAt(0).toUpperCase() + mood.slice(1)} Music Recommendations`;
-                recommendationsDiv.appendChild(header);
-                
+                if (!data.tracks || data.tracks.length === 0) {
+                    resultsDiv.innerHTML = '<p class="text-center">No results found</p>';
+                    return;
+                }
+
                 // Create grid for tracks
                 const grid = document.createElement('div');
                 grid.className = 'row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4';
@@ -561,23 +568,24 @@
                                         <i class="fas fa-play"></i> Preview
                                     </button>
                                 ` : ''}
-                                <a href="${track.external_url}" target="_blank" class="btn btn-success btn-sm">
-                                    <i class="fab fa-spotify"></i> Open in Spotify
-                                </a>
+                                <button class="btn ${selectedTracks.has(track.id) ? 'btn-danger' : 'btn-success'} btn-sm" 
+                                        onclick="toggleTrack('${track.id}', '${track.name}', '${track.artist}')">
+                                    <i class="fas ${selectedTracks.has(track.id) ? 'fa-minus' : 'fa-plus'}"></i> 
+                                    ${selectedTracks.has(track.id) ? 'Remove' : 'Add'}
+                                </button>
                             </div>
                         </div>
                     `;
                     grid.appendChild(col);
                 });
                 
-                recommendationsDiv.appendChild(grid);
-                showAlert(data.message || 'Recommendations loaded!', 'success');
+                resultsDiv.appendChild(grid);
+                showAlert(data.message, 'success');
             })
             .catch(error => {
                 console.error('Error:', error);
                 showAlert(error.message);
                 
-                // If it's an authentication error, redirect to login
                 if (error.message.toLowerCase().includes('login') || 
                     error.message.toLowerCase().includes('session') || 
                     error.message.toLowerCase().includes('token')) {
@@ -587,26 +595,118 @@
                 }
             })
             .finally(() => {
-                // Re-enable all mood buttons and restore original text
-                buttons.forEach(btn => {
-                    btn.disabled = false;
-                    if (btn.getAttribute('data-mood') === mood) {
-                        btn.innerHTML = `<i class="fas ${getMoodIcon(mood)}"></i> ${mood.charAt(0).toUpperCase() + mood.slice(1)}`;
-                    }
-                });
+                searchInput.disabled = false;
             });
         }
 
-        function getMoodIcon(mood) {
-            const icons = {
-                'happy': 'fa-smile',
-                'sad': 'fa-sad-tear',
-                'energetic': 'fa-bolt',
-                'calm': 'fa-cloud',
-                'romantic': 'fa-heart'
-            };
-            return icons[mood] || 'fa-music';
+        function toggleTrack(trackId, name, artist) {
+            const selectedTracksSection = document.getElementById('selectedTracksSection');
+            const selectedTracksList = document.getElementById('selectedTracks');
+            
+            if (selectedTracks.has(trackId)) {
+                selectedTracks.delete(trackId);
+                document.getElementById(`selected-${trackId}`).remove();
+                
+                // Update all add/remove buttons for this track
+                document.querySelectorAll(`button[onclick*="${trackId}"]`).forEach(btn => {
+                    btn.className = 'btn btn-success btn-sm';
+                    btn.innerHTML = '<i class="fas fa-plus"></i> Add';
+                });
+            } else {
+                selectedTracks.add(trackId);
+                const trackItem = document.createElement('div');
+                trackItem.id = `selected-${trackId}`;
+                trackItem.className = 'list-group-item d-flex justify-content-between align-items-center';
+                trackItem.innerHTML = `
+                    ${name} - ${artist}
+                    <button class="btn btn-danger btn-sm" onclick="toggleTrack('${trackId}', '${name}', '${artist}')">
+                        <i class="fas fa-times"></i>
+                    </button>
+                `;
+                selectedTracksList.appendChild(trackItem);
+                
+                // Update all add/remove buttons for this track
+                document.querySelectorAll(`button[onclick*="${trackId}"]`).forEach(btn => {
+                    btn.className = 'btn btn-danger btn-sm';
+                    btn.innerHTML = '<i class="fas fa-minus"></i> Remove';
+                });
+            }
+            
+            // Show/hide selected tracks section
+            selectedTracksSection.style.display = selectedTracks.size > 0 ? 'block' : 'none';
         }
+
+        function createPlaylist() {
+            const playlistName = document.getElementById('playlistName').value.trim();
+            if (!playlistName) {
+                showAlert('Please enter a playlist name');
+                return;
+            }
+            
+            if (selectedTracks.size === 0) {
+                showAlert('Please select at least one track');
+                return;
+            }
+            
+            // Disable create button and show loading
+            const createButton = document.querySelector('button[onclick="createPlaylist()"]');
+            createButton.disabled = true;
+            createButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating...';
+            
+            // Convert track IDs to Spotify URIs
+            const trackUris = Array.from(selectedTracks).map(id => `spotify:track:${id}`);
+            
+            fetch('/api/create-playlist', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    name: playlistName,
+                    tracks: trackUris
+                })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => {
+                        throw new Error(err.error || 'Failed to create playlist');
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                showAlert(data.message, 'success');
+                
+                // Clear selected tracks
+                selectedTracks.clear();
+                document.getElementById('selectedTracks').innerHTML = '';
+                document.getElementById('selectedTracksSection').style.display = 'none';
+                document.getElementById('playlistName').value = '';
+                
+                // Open playlist in Spotify
+                if (data.playlist_url) {
+                    window.open(data.playlist_url, '_blank');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showAlert(error.message);
+            })
+            .finally(() => {
+                // Re-enable create button
+                createButton.disabled = false;
+                createButton.innerHTML = '<i class="fas fa-plus"></i> Create Playlist';
+            });
+        }
+
+        // Add event listener for search input
+        document.getElementById('searchInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                handleSearch();
+            }
+        });
+
+        let currentPlayingAudio = null;
 
         function playPreview(url, button) {
             if (currentPlayingAudio) {
