@@ -484,6 +484,9 @@
         let currentPlayingAudio = null;
 
         function showAlert(message, type = 'danger') {
+            // Remove any existing alerts
+            document.querySelectorAll('.alert').forEach(alert => alert.remove());
+            
             const alertDiv = document.createElement('div');
             alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
             alertDiv.innerHTML = `
@@ -499,12 +502,17 @@
         }
 
         function handleMoodSelection(mood) {
-            // Disable all mood buttons
+            // Disable all mood buttons and show loading state
             const buttons = document.querySelectorAll('.mood-button');
-            buttons.forEach(btn => btn.disabled = true);
+            buttons.forEach(btn => {
+                btn.disabled = true;
+                if (btn.getAttribute('data-mood') === mood) {
+                    btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Loading...`;
+                }
+            });
             
-            // Show loading
-            showAlert('Getting recommendations...', 'info');
+            // Show loading message
+            showAlert('Getting your personalized recommendations...', 'info');
 
             fetch('/api/get-recommendations', {
                 method: 'POST',
@@ -563,16 +571,41 @@
                 });
                 
                 recommendationsDiv.appendChild(grid);
-                showAlert('Recommendations loaded!', 'success');
+                showAlert(data.message || 'Recommendations loaded!', 'success');
             })
             .catch(error => {
                 console.error('Error:', error);
                 showAlert(error.message);
+                
+                // If it's an authentication error, redirect to login
+                if (error.message.toLowerCase().includes('login') || 
+                    error.message.toLowerCase().includes('session') || 
+                    error.message.toLowerCase().includes('token')) {
+                    setTimeout(() => {
+                        window.location.href = '/spotify-login';
+                    }, 2000);
+                }
             })
             .finally(() => {
-                // Re-enable all mood buttons
-                buttons.forEach(btn => btn.disabled = false);
+                // Re-enable all mood buttons and restore original text
+                buttons.forEach(btn => {
+                    btn.disabled = false;
+                    if (btn.getAttribute('data-mood') === mood) {
+                        btn.innerHTML = `<i class="fas ${getMoodIcon(mood)}"></i> ${mood.charAt(0).toUpperCase() + mood.slice(1)}`;
+                    }
+                });
             });
+        }
+
+        function getMoodIcon(mood) {
+            const icons = {
+                'happy': 'fa-smile',
+                'sad': 'fa-sad-tear',
+                'energetic': 'fa-bolt',
+                'calm': 'fa-cloud',
+                'romantic': 'fa-heart'
+            };
+            return icons[mood] || 'fa-music';
         }
 
         function playPreview(url, button) {

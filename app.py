@@ -96,13 +96,53 @@ def spotify_login():
             client_id=SPOTIPY_CLIENT_ID,
             client_secret=SPOTIPY_CLIENT_SECRET,
             redirect_uri=SPOTIPY_REDIRECT_URI,
-            scope='user-library-read playlist-modify-public user-top-read streaming user-read-email user-read-private'
+            scope='user-library-read playlist-modify-public user-top-read streaming user-read-email user-read-private',
+            show_dialog=True  # Force showing the Spotify login dialog
         )
         auth_url = sp_oauth.get_authorize_url()
         return redirect(auth_url)
     except Exception as e:
         print(f"Login error: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+@app.route('/callback')
+def callback():
+    try:
+        sp_oauth = SpotifyOAuth(
+            client_id=SPOTIPY_CLIENT_ID,
+            client_secret=SPOTIPY_CLIENT_SECRET,
+            redirect_uri=SPOTIPY_REDIRECT_URI,
+            scope='user-library-read playlist-modify-public user-top-read streaming user-read-email user-read-private'
+        )
+        
+        code = request.args.get('code')
+        if not code:
+            print("No code in callback")
+            return redirect('/')
+            
+        token_info = sp_oauth.get_access_token(code, check_cache=False)
+        if not token_info:
+            print("Failed to get token info")
+            return redirect('/')
+            
+        # Store token info in session
+        session['token_info'] = token_info
+        
+        # Test the token
+        try:
+            sp = spotipy.Spotify(auth=token_info['access_token'])
+            sp.current_user()
+            print("Successfully authenticated user")
+        except Exception as e:
+            print(f"Token test failed: {str(e)}")
+            session.pop('token_info', None)
+            return redirect('/')
+        
+        return redirect('/')
+        
+    except Exception as e:
+        print(f"Callback error: {str(e)}")
+        return redirect('/')
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -126,58 +166,52 @@ def login():
 def profile():
     return render_template('profile.html', user=current_user)
 
-@app.route('/callback')
-def callback():
-    try:
-        sp_oauth = SpotifyOAuth(
-            client_id=SPOTIPY_CLIENT_ID,
-            client_secret=SPOTIPY_CLIENT_SECRET,
-            redirect_uri=SPOTIPY_REDIRECT_URI,
-            scope='user-library-read playlist-modify-public user-top-read streaming user-read-email user-read-private'
-        )
-        
-        code = request.args.get('code')
-        token_info = sp_oauth.get_access_token(code, check_cache=False)
-        
-        # Store token info in session
-        session['token_info'] = token_info
-        
-        return redirect('/')
-        
-    except Exception as e:
-        print(f"Callback error: {str(e)}")
-        return redirect('/')
-
-@app.route('/logout')
-def logout():
-    session.pop('token_info', None)
-    return redirect('/')
-
 @app.route('/api/get-recommendations', methods=['POST'])
 def get_recommendations():
     try:
-        sp = get_spotify()
-        if not sp:
+        if 'token_info' not in session:
+            print("No token in session")
             return jsonify({'error': 'Please login first'}), 401
 
-        data = request.get_json()
-        mood = data.get('mood', '').lower() if data else None
+        token_info = session['token_info']
+        if not token_info:
+            print("Token info is empty")
+            return jsonify({'error': 'Invalid session, please login again'}), 401
+
+        sp = spotipy.Spotify(auth=token_info['access_token'])
         
+        # Verify the token works
+        try:
+            sp.current_user()
+        except Exception as e:
+            print(f"Token verification failed: {str(e)}")
+            session.pop('token_info', None)
+            return jsonify({'error': 'Session expired, please login again'}), 401
+
+        data = request.get_json()
+        if not data:
+            print("No data in request")
+            return jsonify({'error': 'No data provided'}), 400
+            
+        mood = data.get('mood', '').lower()
         if not mood:
+            print("No mood specified")
             return jsonify({'error': 'Please select a mood'}), 400
+
+        print(f"Processing request for mood: {mood}")
 
         # Map moods to specific popular playlists
         mood_to_playlist = {
-            'happy': '37i9dQZF1DXdPec7aLTmlC',  # Happy Hits
-            'sad': '37i9dQZF1DX7qK8ma5wgG1',    # Sad Songs
+            'happy': '37i9dQZF1DXdPec7aLTmlC',      # Happy Hits
+            'sad': '37i9dQZF1DX7qK8ma5wgG1',        # Sad Songs
             'energetic': '37i9dQZF1DX76Wlfdnj7AP',  # Beast Mode
-            'calm': '37i9dQZF1DWZd79rJ6a7lp',    # Sleep
-            'romantic': '37i9dQZF1DX50QitC6Oqtn'  # Love Pop
+            'calm': '37i9dQZF1DWZd79rJ6a7lp',       # Sleep
+            'romantic': '37i9dQZF1DX50QitC6Oqtn'    # Love Pop
         }
 
         playlist_id = mood_to_playlist.get(mood)
         if not playlist_id:
-            print(f"No playlist found for mood: {mood}")
+            print(f"Invalid mood selected: {mood}")
             return jsonify({'error': 'Invalid mood selected'}), 400
 
         print(f"Getting tracks from playlist: {playlist_id}")
@@ -190,13 +224,20 @@ def get_recommendations():
                 limit=20
             )
             
-            if not results or 'items' not in results:
-                print("No items in playlist results")
-                return jsonify({'error': 'No tracks found in playlist'}), 404
+            if not results:
+                print("No results from playlist")
+                return jsonify({'error': 'Failed to get playlist'}), 500
+                
+            if 'items' not in results:
+                print("No items in results")
+                return jsonify({'error': 'No tracks in playlist'}), 404
 
             tracks = []
             for item in results['items']:
-                if not item or 'track' not in item:
+                if not item:
+                    continue
+                    
+                if 'track' not in item:
                     continue
                     
                 track = item['track']
@@ -204,6 +245,7 @@ def get_recommendations():
                     continue
 
                 try:
+                    # Get track data
                     track_data = {
                         'id': track['id'],
                         'name': track['name'],
@@ -214,6 +256,7 @@ def get_recommendations():
                         'external_url': track['external_urls'].get('spotify', '')
                     }
                     tracks.append(track_data)
+                    print(f"Added track: {track_data['name']}")
                 except Exception as e:
                     print(f"Error processing track: {str(e)}")
                     continue
@@ -222,15 +265,22 @@ def get_recommendations():
                 print("No valid tracks found")
                 return jsonify({'error': 'No valid tracks found'}), 404
 
-            print(f"Returning {len(tracks)} tracks")
-            return jsonify({'tracks': tracks, 'mood': mood})
+            print(f"Successfully found {len(tracks)} tracks")
+            return jsonify({
+                'tracks': tracks,
+                'mood': mood,
+                'message': f'Found {len(tracks)} tracks for {mood} mood'
+            })
 
+        except spotipy.exceptions.SpotifyException as e:
+            print(f"Spotify API error: {str(e)}")
+            return jsonify({'error': f'Spotify API error: {str(e)}'}), 500
         except Exception as e:
             print(f"Error getting playlist tracks: {str(e)}")
             return jsonify({'error': 'Failed to get playlist tracks'}), 500
 
     except Exception as e:
-        print(f"General error: {str(e)}")
+        print(f"General error in get_recommendations: {str(e)}")
         return jsonify({'error': f'An error occurred: {str(e)}'}), 500
 
 @app.route('/api/create-playlist', methods=['POST'])
@@ -346,6 +396,11 @@ def save_playlist():
 @app.route('/api/saved-playlists')
 def get_saved_playlists():
     return jsonify(session.get('playlists', []))
+
+@app.route('/logout')
+def logout():
+    session.pop('token_info', None)
+    return redirect('/')
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5002))
