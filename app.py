@@ -316,41 +316,34 @@ def get_mood_recommendations():
         mood_mapping = {
             'happy': {
                 'features': {'target_valence': 0.8, 'target_energy': 0.7, 'target_danceability': 0.7},
-                'genres': ['pop', 'dance', 'happy']
+                'genres': ['pop', 'dance']  # Using verified genres
             },
             'sad': {
                 'features': {'target_valence': 0.2, 'target_energy': 0.3, 'target_danceability': 0.4},
-                'genres': ['acoustic', 'sad', 'indie']
+                'genres': ['acoustic', 'indie']
             },
             'energetic': {
                 'features': {'target_valence': 0.6, 'target_energy': 0.9, 'target_danceability': 0.8},
-                'genres': ['dance', 'electronic', 'edm']
+                'genres': ['electronic', 'dance']
             },
             'calm': {
                 'features': {'target_valence': 0.4, 'target_energy': 0.2, 'target_danceability': 0.3},
-                'genres': ['ambient', 'chill', 'study']
+                'genres': ['classical', 'ambient']
             },
             'romantic': {
                 'features': {'target_valence': 0.6, 'target_energy': 0.4, 'target_danceability': 0.5},
-                'genres': ['romance', 'jazz', 'r-n-b']
+                'genres': ['jazz', 'soul']
             }
         }
 
         if mood not in mood_mapping:
             return jsonify({'error': 'Invalid mood'}), 400
 
-        # Get available genres to validate our seed genres
-        available_genres = sp.recommendation_genre_seeds()['genres']
-        
-        # Filter genres to only use available ones
-        valid_genres = [genre for genre in mood_mapping[mood]['genres'] if genre in available_genres]
-        if not valid_genres:
-            valid_genres = ['pop']  # Fallback to pop if no valid genres
-
         # Get recommendations based on mood
         try:
+            print(f"Getting recommendations for {mood} with genres {mood_mapping[mood]['genres']}")
             recommendations = sp.recommendations(
-                seed_genres=valid_genres[:3],  # Use up to 3 genres
+                seed_genres=mood_mapping[mood]['genres'][:2],  # Use 2 genres
                 limit=20,
                 **mood_mapping[mood]['features']
             )
