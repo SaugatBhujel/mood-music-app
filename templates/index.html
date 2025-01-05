@@ -832,19 +832,19 @@
                     <!-- Mood Tab -->
                     <div class="tab-pane fade show active" id="mood" role="tabpanel">
                         <div class="mood-container animate-fade-in">
-                            <button class="mood-btn" onclick="handleMoodSelection('happy')">
+                            <button class="mood-btn" onclick="getMoodRecommendations('happy')">
                                 <i class="fas fa-smile"></i> Happy
                             </button>
-                            <button class="mood-btn" onclick="handleMoodSelection('sad')">
+                            <button class="mood-btn" onclick="getMoodRecommendations('sad')">
                                 <i class="fas fa-sad-tear"></i> Sad
                             </button>
-                            <button class="mood-btn" onclick="handleMoodSelection('energetic')">
+                            <button class="mood-btn" onclick="getMoodRecommendations('energetic')">
                                 <i class="fas fa-bolt"></i> Energetic
                             </button>
-                            <button class="mood-btn" onclick="handleMoodSelection('calm')">
+                            <button class="mood-btn" onclick="getMoodRecommendations('calm')">
                                 <i class="fas fa-cloud"></i> Calm
                             </button>
-                            <button class="mood-btn" onclick="handleMoodSelection('romantic')">
+                            <button class="mood-btn" onclick="getMoodRecommendations('romantic')">
                                 <i class="fas fa-heart"></i> Romantic
                             </button>
                         </div>
@@ -918,252 +918,9 @@
         let selectedTracks = new Set();
         let searchTimeout;
 
-        function showAlert(message, type = 'danger') {
-            // Remove any existing alerts
-            document.querySelectorAll('.alert').forEach(alert => alert.remove());
-            
-            const alertDiv = document.createElement('div');
-            alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
-            alertDiv.innerHTML = `
-                ${message}
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            `;
-            document.querySelector('.container').insertBefore(alertDiv, document.querySelector('.container').firstChild);
-            
-            // Auto dismiss after 5 seconds
-            setTimeout(() => {
-                alertDiv.remove();
-            }, 5000);
-        }
-
-        function handleSearch() {
-            const searchInput = document.getElementById('searchInput');
-            const query = searchInput.value.trim();
-            
-            if (!query) {
-                showAlert('Please enter a search term');
-                return;
-            }
-
-            // Show loading state
-            searchInput.disabled = true;
-            showAlert('Searching...', 'info');
-
-            fetch('/api/search', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ query: query })
-            })
-            .then(response => {
-                if (!response.ok) {
-                    return response.json().then(err => {
-                        throw new Error(err.error || 'Search failed');
-                    });
-                }
-                return response.json();
-            })
-            .then(data => {
-                const resultsDiv = document.getElementById('resultsArea');
-                resultsDiv.innerHTML = '';
-                
-                if (!data.tracks || data.tracks.length === 0) {
-                    resultsDiv.innerHTML = '<p class="text-center">No results found</p>';
-                    return;
-                }
-
-                // Create grid for tracks
-                const grid = document.createElement('div');
-                grid.className = 'row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4';
-                
-                data.tracks.forEach(track => {
-                    const col = document.createElement('div');
-                    col.className = 'col';
-                    col.innerHTML = `
-                        <div class="card h-100">
-                            <img src="${track.album_image || 'https://via.placeholder.com/300'}" class="card-img-top" alt="${track.name}">
-                            <div class="card-body">
-                                <h5 class="card-title">${track.name}</h5>
-                                <p class="card-text">
-                                    Artist: ${track.artist}<br>
-                                    Album: ${track.album}
-                                </p>
-                                ${track.preview_url ? `
-                                    <button class="btn btn-primary btn-sm me-2" onclick="playPreview('${track.preview_url}', this)">
-                                        <i class="fas fa-play"></i> Preview
-                                    </button>
-                                ` : ''}
-                                <button class="btn ${selectedTracks.has(track.id) ? 'btn-danger' : 'btn-success'} btn-sm" 
-                                        onclick="toggleTrack('${track.id}', '${track.name}', '${track.artist}')">
-                                    <i class="fas ${selectedTracks.has(track.id) ? 'fa-minus' : 'fa-plus'}"></i> 
-                                    ${selectedTracks.has(track.id) ? 'Remove' : 'Add'}
-                                </button>
-                            </div>
-                        </div>
-                    `;
-                    grid.appendChild(col);
-                });
-                
-                resultsDiv.appendChild(grid);
-                showAlert(data.message, 'success');
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                showAlert(error.message);
-                
-                if (error.message.toLowerCase().includes('login') || 
-                    error.message.toLowerCase().includes('session') || 
-                    error.message.toLowerCase().includes('token')) {
-                    setTimeout(() => {
-                        window.location.href = '/spotify-login';
-                    }, 2000);
-                }
-            })
-            .finally(() => {
-                searchInput.disabled = false;
-            });
-        }
-
-        function toggleTrack(trackId, name, artist) {
-            const selectedTracksSection = document.getElementById('selectedTracksSection');
-            const selectedTracksList = document.getElementById('selectedTracks');
-            
-            if (selectedTracks.has(trackId)) {
-                selectedTracks.delete(trackId);
-                document.getElementById(`selected-${trackId}`).remove();
-                
-                // Update all add/remove buttons for this track
-                document.querySelectorAll(`button[onclick*="${trackId}"]`).forEach(btn => {
-                    btn.className = 'btn btn-success btn-sm';
-                    btn.innerHTML = '<i class="fas fa-plus"></i> Add';
-                });
-            } else {
-                selectedTracks.add(trackId);
-                const trackItem = document.createElement('div');
-                trackItem.id = `selected-${trackId}`;
-                trackItem.className = 'list-group-item d-flex justify-content-between align-items-center';
-                trackItem.innerHTML = `
-                    ${name} - ${artist}
-                    <button class="btn btn-danger btn-sm" onclick="toggleTrack('${trackId}', '${name}', '${artist}')">
-                        <i class="fas fa-times"></i>
-                    </button>
-                `;
-                selectedTracksList.appendChild(trackItem);
-                
-                // Update all add/remove buttons for this track
-                document.querySelectorAll(`button[onclick*="${trackId}"]`).forEach(btn => {
-                    btn.className = 'btn btn-danger btn-sm';
-                    btn.innerHTML = '<i class="fas fa-minus"></i> Remove';
-                });
-            }
-            
-            // Show/hide selected tracks section
-            selectedTracksSection.style.display = selectedTracks.size > 0 ? 'block' : 'none';
-        }
-
-        function createPlaylist() {
-            const playlistName = document.getElementById('playlistName').value.trim();
-            if (!playlistName) {
-                showAlert('Please enter a playlist name');
-                return;
-            }
-            
-            if (selectedTracks.size === 0) {
-                showAlert('Please select at least one track');
-                return;
-            }
-            
-            // Disable create button and show loading
-            const createButton = document.querySelector('button[onclick="createPlaylist()"]');
-            createButton.disabled = true;
-            createButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating...';
-            
-            // Convert track IDs to Spotify URIs
-            const trackUris = Array.from(selectedTracks).map(id => `spotify:track:${id}`);
-            
-            fetch('/api/create-playlist', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    name: playlistName,
-                    tracks: trackUris
-                })
-            })
-            .then(response => {
-                if (!response.ok) {
-                    return response.json().then(err => {
-                        throw new Error(err.error || 'Failed to create playlist');
-                    });
-                }
-                return response.json();
-            })
-            .then(data => {
-                showAlert(data.message, 'success');
-                
-                // Clear selected tracks
-                selectedTracks.clear();
-                document.getElementById('selectedTracks').innerHTML = '';
-                document.getElementById('selectedTracksSection').style.display = 'none';
-                document.getElementById('playlistName').value = '';
-                
-                // Open playlist in Spotify
-                if (data.playlist_url) {
-                    window.open(data.playlist_url, '_blank');
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                showAlert(error.message);
-            })
-            .finally(() => {
-                // Re-enable create button
-                createButton.disabled = false;
-                createButton.innerHTML = '<i class="fas fa-plus"></i> Create Playlist';
-            });
-        }
-
-        // Add event listener for search input
-        document.getElementById('searchInput').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                handleSearch();
-            }
-        });
-
-        let currentPlayingAudio = null;
-
-        function playPreview(url, button) {
-            if (currentPlayingAudio) {
-                currentPlayingAudio.pause();
-                document.querySelectorAll('.btn-primary').forEach(btn => {
-                    btn.innerHTML = '<i class="fas fa-play"></i> Preview';
-                });
-            }
-            
-            if (currentPlayingAudio && currentPlayingAudio.src === url) {
-                currentPlayingAudio = null;
-                return;
-            }
-            
-            const audio = new Audio(url);
-            audio.play();
-            button.innerHTML = '<i class="fas fa-pause"></i> Pause';
-            
-            audio.onended = () => {
-                button.innerHTML = '<i class="fas fa-play"></i> Preview';
-                currentPlayingAudio = null;
-            };
-            
-            currentPlayingAudio = audio;
-        }
-        
-        function handleMoodSelection(mood) {
-            // Show loading state
-            const moodButton = document.querySelector(`button[data-mood="${mood}"]`);
-            moodButton.disabled = true;
-            moodButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
+        function getMoodRecommendations(mood) {
+            showLoading();
+            clearResults();
             
             fetch('/api/mood-based-recommendations', {
                 method: 'POST',
@@ -1181,114 +938,98 @@
                 return response.json();
             })
             .then(data => {
-                const resultsDiv = document.getElementById('resultsArea');
-                resultsDiv.innerHTML = '';
-                
-                if (!data.tracks || data.tracks.length === 0) {
-                    resultsDiv.innerHTML = '<p class="text-center">No results found</p>';
-                    return;
+                hideLoading();
+                if (data.tracks && data.tracks.length > 0) {
+                    displaySongs(data.tracks);
+                } else {
+                    showAlert('No songs found for this mood. Try another mood!');
                 }
-
-                // Create grid for tracks
-                const grid = document.createElement('div');
-                grid.className = 'row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4';
-                
-                data.tracks.forEach(track => {
-                    const col = document.createElement('div');
-                    col.className = 'col';
-                    col.innerHTML = `
-                        <div class="card h-100">
-                            <img src="${track.album_image || 'https://via.placeholder.com/300'}" class="card-img-top" alt="${track.name}">
-                            <div class="card-body">
-                                <h5 class="card-title">${track.name}</h5>
-                                <p class="card-text">
-                                    Artist: ${track.artist}<br>
-                                    Album: ${track.album}
-                                </p>
-                                ${track.preview_url ? `
-                                    <button class="btn btn-primary btn-sm me-2" onclick="playPreview('${track.preview_url}', this)">
-                                        <i class="fas fa-play"></i> Preview
-                                    </button>
-                                ` : ''}
-                                <button class="btn ${selectedTracks.has(track.id) ? 'btn-danger' : 'btn-success'} btn-sm" 
-                                        onclick="toggleTrack('${track.id}', '${track.name}', '${track.artist}')">
-                                    <i class="fas ${selectedTracks.has(track.id) ? 'fa-minus' : 'fa-plus'}"></i> 
-                                    ${selectedTracks.has(track.id) ? 'Remove' : 'Add'}
-                                </button>
-                            </div>
-                        </div>
-                    `;
-                    grid.appendChild(col);
-                });
-                
-                resultsDiv.appendChild(grid);
-                moodButton.disabled = false;
-                moodButton.innerHTML = `<i class="fas fa-${mood === 'happy' ? 'smile' : mood === 'sad' ? 'sad-tear' : mood === 'energetic' ? 'bolt' : mood === 'calm' ? 'cloud' : 'heart'}"></i> ${mood.charAt(0).toUpperCase() + mood.slice(1)}`;
             })
             .catch(error => {
+                hideLoading();
+                showAlert(error.message || 'Failed to get recommendations');
                 console.error('Error:', error);
-                showAlert(error.message);
             });
         }
 
         function displaySongs(songs) {
             const resultsDiv = document.getElementById('resultsArea');
-            const template = document.getElementById('song-template');
-            resultsDiv.innerHTML = '';
-
+            resultsDiv.innerHTML = ''; // Clear previous results
+            
             songs.forEach(song => {
-                const songElement = template.content.cloneNode(true);
+                const songCard = document.createElement('div');
+                songCard.className = 'song-card';
                 
-                // Set image
-                const img = songElement.querySelector('.song-image');
-                img.src = song.album_image || 'path/to/default-album-art.jpg';
-                img.alt = `${song.album} Cover`;
-
-                // Set text content
-                songElement.querySelector('.song-title').textContent = song.name;
-                songElement.querySelector('.song-artist').textContent = song.artist;
-                songElement.querySelector('.song-album').textContent = song.album;
-
-                // Set up preview button
-                const previewBtn = songElement.querySelector('.preview-btn');
-                if (song.preview_url) {
-                    previewBtn.onclick = () => {
-                        const audio = document.querySelector('audio');
-                        if (audio) {
-                            if (audio.src === song.preview_url && !audio.paused) {
-                                audio.pause();
-                                previewBtn.innerHTML = '<i class="fas fa-play"></i> Preview';
-                            } else {
-                                audio.src = song.preview_url;
-                                audio.play();
-                                document.querySelectorAll('.preview-btn').forEach(btn => {
-                                    btn.innerHTML = '<i class="fas fa-play"></i> Preview';
-                                });
-                                previewBtn.innerHTML = '<i class="fas fa-pause"></i> Pause';
+                songCard.innerHTML = `
+                    <img class="song-image" src="${song.album_image || 'default-album-art.jpg'}" alt="${song.album} Cover">
+                    <div class="song-info">
+                        <h3 class="song-title">${song.name}</h3>
+                        <p class="song-artist">${song.artist}</p>
+                        <p class="song-album">${song.album}</p>
+                        <div class="song-controls">
+                            ${song.preview_url ? 
+                                `<button class="preview-btn" onclick="playPreview('${song.preview_url}', this)">
+                                    <i class="fas fa-play"></i> Preview
+                                </button>` :
+                                `<button class="preview-btn" disabled>
+                                    <i class="fas fa-times"></i> No Preview
+                                </button>`
                             }
-                        }
-                    };
-                } else {
-                    previewBtn.disabled = true;
-                    previewBtn.innerHTML = '<i class="fas fa-times"></i> No Preview';
-                    previewBtn.style.opacity = '0.5';
-                }
-
-                // Set up Spotify button
-                const spotifyBtn = songElement.querySelector('.spotify-btn');
-                spotifyBtn.href = song.external_url;
-
-                resultsDiv.appendChild(songElement);
+                            <a href="${song.external_url}" class="spotify-btn" target="_blank">
+                                <i class="fab fa-spotify"></i> Listen
+                            </a>
+                        </div>
+                    </div>
+                `;
+                
+                resultsDiv.appendChild(songCard);
             });
         }
 
-        // Show/hide loading animation
+        function playPreview(url, button) {
+            const audio = document.querySelector('audio') || new Audio();
+            
+            // Stop all other previews
+            document.querySelectorAll('.preview-btn').forEach(btn => {
+                if (btn !== button) {
+                    btn.innerHTML = '<i class="fas fa-play"></i> Preview';
+                }
+            });
+
+            if (audio.src === url && !audio.paused) {
+                audio.pause();
+                button.innerHTML = '<i class="fas fa-play"></i> Preview';
+            } else {
+                audio.src = url;
+                audio.play();
+                button.innerHTML = '<i class="fas fa-pause"></i> Pause';
+            }
+        }
+
         function showLoading() {
             document.querySelector('.loading-animation').classList.add('active');
         }
 
         function hideLoading() {
             document.querySelector('.loading-animation').classList.remove('active');
+        }
+
+        function clearResults() {
+            const resultsDiv = document.getElementById('resultsArea');
+            if (resultsDiv) {
+                resultsDiv.innerHTML = '';
+            }
+        }
+
+        function showAlert(message) {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = 'alert alert-warning';
+            alertDiv.role = 'alert';
+            alertDiv.textContent = message;
+            
+            const resultsDiv = document.getElementById('resultsArea');
+            resultsDiv.innerHTML = '';
+            resultsDiv.appendChild(alertDiv);
         }
     </script>
     <template id="song-template">
