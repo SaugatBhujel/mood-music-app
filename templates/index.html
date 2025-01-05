@@ -834,7 +834,7 @@
             moodButton.disabled = true;
             moodButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
             
-            fetch('/api/recommendations', {
+            fetch('/api/mood-based-recommendations', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

@@ -283,8 +283,8 @@ def get_recommendations():
         print(f"General error in get_recommendations: {str(e)}")
         return jsonify({'error': f'An error occurred: {str(e)}'}), 500
 
-@app.route('/api/recommendations', methods=['POST'])
-def get_recommendations():
+@app.route('/api/mood-based-recommendations', methods=['POST'])
+def get_mood_recommendations():
     try:
         if 'token_info' not in session:
             print("No token in session")
