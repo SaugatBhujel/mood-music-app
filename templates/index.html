@@ -593,6 +593,206 @@
                 padding: 15px;
             }
         }
+
+        /* Modern song card styling */
+        .song-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 25px;
+            padding: 30px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .song-card {
+            background: linear-gradient(145deg, rgba(29, 185, 84, 0.1), rgba(25, 20, 20, 0.7));
+            border-radius: 16px;
+            padding: 20px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+
+        .song-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 30px rgba(0, 0, 0, 0.3);
+            border-color: rgba(29, 185, 84, 0.3);
+        }
+
+        .song-image {
+            width: 100%;
+            aspect-ratio: 1;
+            border-radius: 12px;
+            margin-bottom: 15px;
+            object-fit: cover;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+        }
+
+        .song-info {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .song-title {
+            font-size: 1.2em;
+            font-weight: 700;
+            margin: 0 0 8px 0;
+            color: #fff;
+            line-height: 1.4;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+        }
+
+        .song-artist {
+            font-size: 1em;
+            color: #1DB954;
+            margin: 0 0 4px 0;
+            font-weight: 500;
+        }
+
+        .song-album {
+            font-size: 0.9em;
+            color: rgba(255, 255, 255, 0.6);
+            margin: 0 0 15px 0;
+            font-weight: 400;
+        }
+
+        .song-controls {
+            display: flex;
+            gap: 12px;
+            margin-top: auto;
+        }
+
+        .preview-btn, .spotify-btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 0.95em;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .preview-btn {
+            background: #1DB954;
+            color: #000;
+        }
+
+        .preview-btn:hover {
+            background: #1ed760;
+            transform: scale(1.02);
+        }
+
+        .preview-btn:disabled {
+            background: #333;
+            color: rgba(255, 255, 255, 0.5);
+            cursor: not-allowed;
+        }
+
+        .spotify-btn {
+            background: transparent;
+            color: #1DB954;
+            border: 2px solid #1DB954;
+        }
+
+        .spotify-btn:hover {
+            background: rgba(29, 185, 84, 0.1);
+            transform: scale(1.02);
+        }
+
+        /* Loading animation */
+        .loading-animation {
+            display: none;
+            justify-content: center;
+            align-items: center;
+            padding: 40px;
+        }
+
+        .loading-animation.active {
+            display: flex;
+        }
+
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(29, 185, 84, 0.1);
+            border-left-color: #1DB954;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Mood buttons styling */
+        .mood-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 20px;
+            padding: 30px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .mood-btn {
+            padding: 15px 30px;
+            font-size: 1.1em;
+            font-weight: 600;
+            border: none;
+            border-radius: 30px;
+            background: linear-gradient(145deg, rgba(29, 185, 84, 0.2), rgba(29, 185, 84, 0.1));
+            color: #fff;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 1px solid rgba(29, 185, 84, 0.2);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .mood-btn:hover {
+            transform: translateY(-2px);
+            background: linear-gradient(145deg, rgba(29, 185, 84, 0.3), rgba(29, 185, 84, 0.2));
+            border-color: rgba(29, 185, 84, 0.4);
+        }
+
+        .mood-btn i {
+            font-size: 1.2em;
+        }
+
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .song-grid {
+                grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+                gap: 20px;
+                padding: 20px;
+            }
+
+            .mood-container {
+                padding: 20px;
+                gap: 15px;
+            }
+
+            .mood-btn {
+                padding: 12px 25px;
+                font-size: 1em;
+            }
+        }
     </style>
 </head>
 <body>
@@ -631,25 +831,22 @@
                 <div class="tab-content" id="musicTabsContent">
                     <!-- Mood Tab -->
                     <div class="tab-pane fade show active" id="mood" role="tabpanel">
-                        <div class="mood-section animate-fade-in">
-                            <h2 class="text-center mb-4">How are you feeling today?</h2>
-                            <div class="d-flex flex-wrap justify-content-center gap-3">
-                                <button class="mood-button" onclick="handleMoodSelection('happy')" data-mood="happy">
-                                    <i class="fas fa-smile"></i> Happy
-                                </button>
-                                <button class="mood-button" onclick="handleMoodSelection('sad')" data-mood="sad">
-                                    <i class="fas fa-sad-tear"></i> Sad
-                                </button>
-                                <button class="mood-button" onclick="handleMoodSelection('energetic')" data-mood="energetic">
-                                    <i class="fas fa-bolt"></i> Energetic
-                                </button>
-                                <button class="mood-button" onclick="handleMoodSelection('calm')" data-mood="calm">
-                                    <i class="fas fa-cloud"></i> Calm
-                                </button>
-                                <button class="mood-button" onclick="handleMoodSelection('romantic')" data-mood="romantic">
-                                    <i class="fas fa-heart"></i> Romantic
-                                </button>
-                            </div>
+                        <div class="mood-container animate-fade-in">
+                            <button class="mood-btn" onclick="handleMoodSelection('happy')">
+                                <i class="fas fa-smile"></i> Happy
+                            </button>
+                            <button class="mood-btn" onclick="handleMoodSelection('sad')">
+                                <i class="fas fa-sad-tear"></i> Sad
+                            </button>
+                            <button class="mood-btn" onclick="handleMoodSelection('energetic')">
+                                <i class="fas fa-bolt"></i> Energetic
+                            </button>
+                            <button class="mood-btn" onclick="handleMoodSelection('calm')">
+                                <i class="fas fa-cloud"></i> Calm
+                            </button>
+                            <button class="mood-btn" onclick="handleMoodSelection('romantic')">
+                                <i class="fas fa-heart"></i> Romantic
+                            </button>
                         </div>
                     </div>
 
@@ -1106,7 +1303,7 @@
                         <i class="fas fa-play"></i> Preview
                     </button>
                     <a class="spotify-btn" target="_blank">
-                        <i class="fab fa-spotify"></i> Open
+                        <i class="fab fa-spotify"></i> Listen
                     </a>
                 </div>
             </div>
