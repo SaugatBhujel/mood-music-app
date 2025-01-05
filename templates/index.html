@@ -459,6 +459,140 @@
             from { opacity: 0; }
             to { opacity: 1; }
         }
+
+        /* Modern card styling for songs */
+        .song-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+            padding: 20px;
+        }
+
+        .song-card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 15px;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .song-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .song-image {
+            width: 100%;
+            aspect-ratio: 1;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            object-fit: cover;
+        }
+
+        .song-info {
+            color: white;
+        }
+
+        .song-title {
+            font-size: 1.1em;
+            font-weight: 600;
+            margin: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            color: #fff;
+        }
+
+        .song-artist {
+            font-size: 0.9em;
+            color: rgba(255, 255, 255, 0.7);
+            margin: 4px 0;
+        }
+
+        .song-album {
+            font-size: 0.8em;
+            color: rgba(255, 255, 255, 0.5);
+            margin: 4px 0;
+            font-style: italic;
+        }
+
+        .song-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 10px;
+        }
+
+        .preview-btn, .spotify-btn {
+            padding: 8px 15px;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .preview-btn {
+            background: #1DB954;
+            color: white;
+        }
+
+        .preview-btn:hover {
+            background: #1ed760;
+            transform: scale(1.05);
+        }
+
+        .spotify-btn {
+            background: transparent;
+            color: #1DB954;
+            border: 1px solid #1DB954;
+        }
+
+        .spotify-btn:hover {
+            background: rgba(29, 185, 84, 0.1);
+        }
+
+        .loading-animation {
+            display: none;
+            justify-content: center;
+            align-items: center;
+            margin: 20px 0;
+        }
+
+        .loading-animation.active {
+            display: flex;
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-left-color: #1DB954;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .song-grid {
+                grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+                gap: 15px;
+                padding: 15px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -543,7 +677,7 @@
         {% if session.get('token_info') %}
         <div class="row mt-4">
             <div class="col-12">
-                <div id="resultsArea" class="recommendations-grid">
+                <div id="resultsArea" class="song-grid">
                     <!-- Results will be loaded here -->
                 </div>
             </div>
@@ -899,6 +1033,88 @@
                 showAlert(error.message);
             });
         }
+
+        function displaySongs(songs) {
+            const resultsDiv = document.getElementById('resultsArea');
+            const template = document.getElementById('song-template');
+            resultsDiv.innerHTML = '';
+
+            songs.forEach(song => {
+                const songElement = template.content.cloneNode(true);
+                
+                // Set image
+                const img = songElement.querySelector('.song-image');
+                img.src = song.album_image || 'path/to/default-album-art.jpg';
+                img.alt = `${song.album} Cover`;
+
+                // Set text content
+                songElement.querySelector('.song-title').textContent = song.name;
+                songElement.querySelector('.song-artist').textContent = song.artist;
+                songElement.querySelector('.song-album').textContent = song.album;
+
+                // Set up preview button
+                const previewBtn = songElement.querySelector('.preview-btn');
+                if (song.preview_url) {
+                    previewBtn.onclick = () => {
+                        const audio = document.querySelector('audio');
+                        if (audio) {
+                            if (audio.src === song.preview_url && !audio.paused) {
+                                audio.pause();
+                                previewBtn.innerHTML = '<i class="fas fa-play"></i> Preview';
+                            } else {
+                                audio.src = song.preview_url;
+                                audio.play();
+                                document.querySelectorAll('.preview-btn').forEach(btn => {
+                                    btn.innerHTML = '<i class="fas fa-play"></i> Preview';
+                                });
+                                previewBtn.innerHTML = '<i class="fas fa-pause"></i> Pause';
+                            }
+                        }
+                    };
+                } else {
+                    previewBtn.disabled = true;
+                    previewBtn.innerHTML = '<i class="fas fa-times"></i> No Preview';
+                    previewBtn.style.opacity = '0.5';
+                }
+
+                // Set up Spotify button
+                const spotifyBtn = songElement.querySelector('.spotify-btn');
+                spotifyBtn.href = song.external_url;
+
+                resultsDiv.appendChild(songElement);
+            });
+        }
+
+        // Show/hide loading animation
+        function showLoading() {
+            document.querySelector('.loading-animation').classList.add('active');
+        }
+
+        function hideLoading() {
+            document.querySelector('.loading-animation').classList.remove('active');
+        }
     </script>
+    <template id="song-template">
+        <div class="song-card">
+            <img class="song-image" src="" alt="Album Cover">
+            <div class="song-info">
+                <h3 class="song-title"></h3>
+                <p class="song-artist"></p>
+                <p class="song-album"></p>
+                <div class="song-controls">
+                    <button class="preview-btn">
+                        <i class="fas fa-play"></i> Preview
+                    </button>
+                    <a class="spotify-btn" target="_blank">
+                        <i class="fab fa-spotify"></i> Open
+                    </a>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <div class="loading-animation">
+        <div class="loading-spinner"></div>
+    </div>
 </body>
 </html>
