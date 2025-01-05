@@ -312,27 +312,56 @@ def get_mood_recommendations():
         mood = data['mood'].lower()
         print(f"Getting recommendations for mood: {mood}")
 
-        # Map moods to audio features
-        mood_features = {
-            'happy': {'valence': 0.8, 'energy': 0.7, 'danceability': 0.7},
-            'sad': {'valence': 0.2, 'energy': 0.3, 'danceability': 0.4},
-            'energetic': {'valence': 0.6, 'energy': 0.9, 'danceability': 0.8},
-            'calm': {'valence': 0.4, 'energy': 0.2, 'danceability': 0.3},
-            'romantic': {'valence': 0.6, 'energy': 0.4, 'danceability': 0.5}
+        # Map moods to audio features and seed genres
+        mood_mapping = {
+            'happy': {
+                'features': {'target_valence': 0.8, 'target_energy': 0.7, 'target_danceability': 0.7},
+                'genres': ['pop', 'dance', 'happy']
+            },
+            'sad': {
+                'features': {'target_valence': 0.2, 'target_energy': 0.3, 'target_danceability': 0.4},
+                'genres': ['acoustic', 'sad', 'indie']
+            },
+            'energetic': {
+                'features': {'target_valence': 0.6, 'target_energy': 0.9, 'target_danceability': 0.8},
+                'genres': ['dance', 'electronic', 'edm']
+            },
+            'calm': {
+                'features': {'target_valence': 0.4, 'target_energy': 0.2, 'target_danceability': 0.3},
+                'genres': ['ambient', 'chill', 'study']
+            },
+            'romantic': {
+                'features': {'target_valence': 0.6, 'target_energy': 0.4, 'target_danceability': 0.5},
+                'genres': ['romance', 'jazz', 'r-n-b']
+            }
         }
 
-        if mood not in mood_features:
+        if mood not in mood_mapping:
             return jsonify({'error': 'Invalid mood'}), 400
 
-        # Get recommendations based on mood
-        recommendations = sp.recommendations(
-            seed_genres=['pop', 'rock', 'indie', 'electronic'],
-            limit=20,
-            **mood_features[mood]
-        )
+        # Get available genres to validate our seed genres
+        available_genres = sp.recommendation_genre_seeds()['genres']
+        
+        # Filter genres to only use available ones
+        valid_genres = [genre for genre in mood_mapping[mood]['genres'] if genre in available_genres]
+        if not valid_genres:
+            valid_genres = ['pop']  # Fallback to pop if no valid genres
 
-        if not recommendations or 'tracks' not in recommendations:
-            return jsonify({'error': 'No recommendations found'}), 404
+        # Get recommendations based on mood
+        try:
+            recommendations = sp.recommendations(
+                seed_genres=valid_genres[:3],  # Use up to 3 genres
+                limit=20,
+                **mood_mapping[mood]['features']
+            )
+            
+            if not recommendations or 'tracks' not in recommendations:
+                print("No recommendations found")
+                return jsonify({'error': 'No recommendations found'}), 404
+
+        except Exception as e:
+            print(f"Error getting recommendations: {str(e)}")
+            return jsonify({'error': 'Failed to get recommendations'}), 500
 
         tracks = []
         for track in recommendations['tracks']:
