@@ -758,40 +758,111 @@
             background: linear-gradient(145deg, rgba(29, 185, 84, 0.2), rgba(29, 185, 84, 0.1));
             color: #fff;
             cursor: pointer;
-            transition: all 0.3s ease;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             border: 1px solid rgba(29, 185, 84, 0.2);
             display: flex;
             align-items: center;
             gap: 10px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .mood-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+            transform: translateX(-100%);
+            transition: transform 0.6s;
         }
 
         .mood-btn:hover {
             transform: translateY(-2px);
             background: linear-gradient(145deg, rgba(29, 185, 84, 0.3), rgba(29, 185, 84, 0.2));
             border-color: rgba(29, 185, 84, 0.4);
+            animation: pulse 1s infinite;
+        }
+
+        .mood-btn:hover::before {
+            transform: translateX(100%);
+        }
+
+        .mood-btn:active {
+            transform: scale(0.95);
+        }
+
+        .mood-btn.loading {
+            pointer-events: none;
+            position: relative;
+            color: transparent;
+        }
+
+        .mood-btn.loading::after {
+            content: '';
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s infinite linear;
+            transform: translate(-50%, -50%);
         }
 
         .mood-btn i {
             font-size: 1.2em;
+            transition: transform 0.3s ease;
         }
 
-        /* Responsive design */
-        @media (max-width: 768px) {
-            .song-grid {
-                grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-                gap: 20px;
-                padding: 20px;
-            }
+        .mood-btn:hover i {
+            transform: scale(1.2) rotate(5deg);
+        }
 
-            .mood-container {
-                padding: 20px;
-                gap: 15px;
-            }
+        /* Custom animations for each mood */
+        .mood-btn[data-mood="happy"]:hover {
+            animation: pulse 1s infinite;
+        }
 
-            .mood-btn {
-                padding: 12px 25px;
-                font-size: 1em;
-            }
+        .mood-btn[data-mood="energetic"]:hover {
+            animation: glow 1.5s infinite;
+        }
+
+        .mood-btn[data-mood="calm"]:hover {
+            animation: none;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(29, 185, 84, 0.2);
+        }
+
+        .mood-btn[data-mood="romantic"]:hover i {
+            animation: pulse 1s infinite;
+        }
+
+        .mood-btn[data-mood="sad"]:hover {
+            animation: none;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(29, 185, 84, 0.2);
+        }
+
+        /* Mood button animations */
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        @keyframes glow {
+            0% { box-shadow: 0 0 5px rgba(29, 185, 84, 0.5); }
+            50% { box-shadow: 0 0 20px rgba(29, 185, 84, 0.8); }
+            100% { box-shadow: 0 0 5px rgba(29, 185, 84, 0.5); }
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
     </style>
 </head>
@@ -832,19 +903,19 @@
                     <!-- Mood Tab -->
                     <div class="tab-pane fade show active" id="mood" role="tabpanel">
                         <div class="mood-container animate-fade-in">
-                            <button class="mood-btn" onclick="getMoodRecommendations('happy')">
+                            <button class="mood-btn" data-mood="happy" onclick="getMoodRecommendations('happy')">
                                 <i class="fas fa-smile"></i> Happy
                             </button>
-                            <button class="mood-btn" onclick="getMoodRecommendations('sad')">
+                            <button class="mood-btn" data-mood="sad" onclick="getMoodRecommendations('sad')">
                                 <i class="fas fa-sad-tear"></i> Sad
                             </button>
-                            <button class="mood-btn" onclick="getMoodRecommendations('energetic')">
+                            <button class="mood-btn" data-mood="energetic" onclick="getMoodRecommendations('energetic')">
                                 <i class="fas fa-bolt"></i> Energetic
                             </button>
-                            <button class="mood-btn" onclick="getMoodRecommendations('calm')">
+                            <button class="mood-btn" data-mood="calm" onclick="getMoodRecommendations('calm')">
                                 <i class="fas fa-cloud"></i> Calm
                             </button>
-                            <button class="mood-btn" onclick="getMoodRecommendations('romantic')">
+                            <button class="mood-btn" data-mood="romantic" onclick="getMoodRecommendations('romantic')">
                                 <i class="fas fa-heart"></i> Romantic
                             </button>
                         </div>
@@ -919,6 +990,18 @@
         let searchTimeout;
 
         function getMoodRecommendations(mood) {
+            // Show loading state on the clicked button
+            const button = document.querySelector(`.mood-btn[onclick*="${mood}"]`);
+            const originalContent = button.innerHTML;
+            button.classList.add('loading');
+            
+            // Disable all mood buttons during loading
+            document.querySelectorAll('.mood-btn').forEach(btn => {
+                btn.style.pointerEvents = 'none';
+                btn.style.opacity = '0.5';
+            });
+            button.style.opacity = '1'; // Keep clicked button visible
+
             showLoading();
             clearResults();
             
@@ -949,6 +1032,17 @@
                 hideLoading();
                 showAlert(error.message || 'Failed to get recommendations');
                 console.error('Error:', error);
+            })
+            .finally(() => {
+                // Restore button state
+                button.classList.remove('loading');
+                button.innerHTML = originalContent;
+                
+                // Re-enable all mood buttons
+                document.querySelectorAll('.mood-btn').forEach(btn => {
+                    btn.style.pointerEvents = 'auto';
+                    btn.style.opacity = '1';
+                });
             });
         }
 
