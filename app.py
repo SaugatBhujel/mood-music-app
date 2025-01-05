@@ -312,75 +312,77 @@ def get_mood_recommendations():
         mood = data['mood'].lower()
         print(f"Getting recommendations for mood: {mood}")
 
-        # Map moods to audio features and seed genres
-        mood_mapping = {
-            'happy': {
-                'features': {'target_valence': 0.8, 'target_energy': 0.7, 'target_danceability': 0.7},
-                'genres': ['pop', 'dance']  # Using verified genres
-            },
-            'sad': {
-                'features': {'target_valence': 0.2, 'target_energy': 0.3, 'target_danceability': 0.4},
-                'genres': ['acoustic', 'indie']
-            },
-            'energetic': {
-                'features': {'target_valence': 0.6, 'target_energy': 0.9, 'target_danceability': 0.8},
-                'genres': ['electronic', 'dance']
-            },
-            'calm': {
-                'features': {'target_valence': 0.4, 'target_energy': 0.2, 'target_danceability': 0.3},
-                'genres': ['classical', 'ambient']
-            },
-            'romantic': {
-                'features': {'target_valence': 0.6, 'target_energy': 0.4, 'target_danceability': 0.5},
-                'genres': ['jazz', 'soul']
-            }
+        # First get some popular tracks based on mood
+        mood_queries = {
+            'happy': 'happy feel good',
+            'sad': 'sad emotional',
+            'energetic': 'party dance',
+            'calm': 'relaxing calm',
+            'romantic': 'love romantic'
         }
 
-        if mood not in mood_mapping:
+        if mood not in mood_queries:
             return jsonify({'error': 'Invalid mood'}), 400
 
-        # Get recommendations based on mood
+        # Search for tracks matching the mood
         try:
-            print(f"Getting recommendations for {mood} with genres {mood_mapping[mood]['genres']}")
+            print(f"Searching for tracks with query: {mood_queries[mood]}")
+            search_results = sp.search(
+                q=mood_queries[mood],
+                type='track',
+                limit=5
+            )
+            
+            if not search_results or 'tracks' not in search_results:
+                print("No search results found")
+                return jsonify({'error': 'No tracks found'}), 404
+
+            # Get seed tracks from search results
+            seed_tracks = [track['id'] for track in search_results['tracks']['items'][:2]]
+            print(f"Using seed tracks: {seed_tracks}")
+
+            # Get recommendations based on these tracks
+            print("Getting recommendations based on seed tracks")
             recommendations = sp.recommendations(
-                seed_genres=mood_mapping[mood]['genres'][:2],  # Use 2 genres
+                seed_tracks=seed_tracks,
                 limit=20,
-                **mood_mapping[mood]['features']
+                target_valence=0.8 if mood == 'happy' else 0.2 if mood == 'sad' else 0.5,
+                target_energy=0.8 if mood in ['happy', 'energetic'] else 0.2 if mood == 'calm' else 0.5
             )
             
             if not recommendations or 'tracks' not in recommendations:
                 print("No recommendations found")
                 return jsonify({'error': 'No recommendations found'}), 404
 
+            tracks = []
+            for track in recommendations['tracks']:
+                try:
+                    track_data = {
+                        'id': track['id'],
+                        'name': track['name'],
+                        'artist': track['artists'][0]['name'] if track['artists'] else 'Unknown Artist',
+                        'album': track['album']['name'] if track['album'] else 'Unknown Album',
+                        'album_image': track['album']['images'][0]['url'] if track['album'].get('images') else None,
+                        'preview_url': track['preview_url'],
+                        'external_url': track['external_urls'].get('spotify', '')
+                    }
+                    tracks.append(track_data)
+                    print(f"Found track: {track_data['name']} by {track_data['artist']}")
+                except Exception as e:
+                    print(f"Error processing track: {str(e)}")
+                    continue
+
+            return jsonify({
+                'tracks': tracks,
+                'message': f'Found {len(tracks)} tracks for {mood} mood'
+            })
+
         except Exception as e:
-            print(f"Error getting recommendations: {str(e)}")
-            return jsonify({'error': 'Failed to get recommendations'}), 500
-
-        tracks = []
-        for track in recommendations['tracks']:
-            try:
-                track_data = {
-                    'id': track['id'],
-                    'name': track['name'],
-                    'artist': track['artists'][0]['name'] if track['artists'] else 'Unknown Artist',
-                    'album': track['album']['name'] if track['album'] else 'Unknown Album',
-                    'album_image': track['album']['images'][0]['url'] if track['album'].get('images') else None,
-                    'preview_url': track['preview_url'],
-                    'external_url': track['external_urls'].get('spotify', '')
-                }
-                tracks.append(track_data)
-                print(f"Found track: {track_data['name']}")
-            except Exception as e:
-                print(f"Error processing track: {str(e)}")
-                continue
-
-        return jsonify({
-            'tracks': tracks,
-            'message': f'Found {len(tracks)} tracks for {mood} mood'
-        })
+            print(f"Error in recommendation process: {str(e)}")
+            return jsonify({'error': f'Failed to get recommendations: {str(e)}'}), 500
 
     except Exception as e:
-        print(f"Recommendations error: {str(e)}")
+        print(f"General error: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/search', methods=['POST'])
