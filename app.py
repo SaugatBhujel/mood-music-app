@@ -327,13 +327,23 @@ def get_mood_recommendations():
         mood = data['mood'].lower()
         print(f"Getting recommendations for mood: {mood}")
 
-        # Super simple mood settings with just one genre
+        # Map moods to popular seed tracks
         mood_settings = {
-            'happy': {'seed_genres': ['pop']},
-            'sad': {'seed_genres': ['acoustic']},
-            'energetic': {'seed_genres': ['dance']},
-            'calm': {'seed_genres': ['classical']},
-            'romantic': {'seed_genres': ['jazz']}
+            'happy': {
+                'seed_tracks': ['4Cy0NHJ8Gh0xMdwyM9RkQm']  # "Good Life" by OneRepublic
+            },
+            'sad': {
+                'seed_tracks': ['4NhDYoQTYCdWHTvlbGVgwo']  # "Say You Won't Let Go" by James Arthur
+            },
+            'energetic': {
+                'seed_tracks': ['0CAfXk7DXMnon4gLudAp7J']  # "Can't Hold Us" by Macklemore
+            },
+            'calm': {
+                'seed_tracks': ['4NpFxQe2UvRCAjto3JqlSl']  # "River Flows in You" by Yiruma
+            },
+            'romantic': {
+                'seed_tracks': ['0tgVpDi06FyKpA1z0VMD4v']  # "Perfect" by Ed Sheeran
+            }
         }
 
         if mood not in mood_settings:
@@ -349,9 +359,20 @@ def get_mood_recommendations():
             market = user_info.get('country', 'US')
             print(f"User market: {market}")
 
-            # Get recommendations with minimal parameters
+            # First verify the seed track exists
+            seed_track = settings['seed_tracks'][0]
+            try:
+                track_info = sp.track(seed_track)
+                print(f"Seed track verified: {track_info['name']} by {track_info['artists'][0]['name']}")
+            except Exception as e:
+                print(f"Error verifying seed track: {str(e)}")
+                # Use a fallback track if the seed track fails
+                seed_track = '06JvOZ39sK8D8SqiqfaxDU'  # "Shape of You" by Ed Sheeran as fallback
+                print("Using fallback seed track")
+
+            # Get recommendations using the seed track
             recommendations = sp.recommendations(
-                seed_genres=settings['seed_genres'],
+                seed_tracks=[seed_track],
                 market=market,
                 limit=20
             )
