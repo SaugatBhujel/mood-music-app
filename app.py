@@ -327,44 +327,13 @@ def get_mood_recommendations():
         mood = data['mood'].lower()
         print(f"Getting recommendations for mood: {mood}")
 
-        # Map moods to genres and audio features
+        # Super simple mood settings with just one genre
         mood_settings = {
-            'happy': {
-                'seed_genres': ['pop', 'dance'],
-                'target_valence': 0.8,
-                'target_energy': 0.8,
-                'min_valence': 0.6,
-                'min_energy': 0.6,
-                'target_tempo': 120
-            },
-            'sad': {
-                'seed_genres': ['piano', 'acoustic'],
-                'target_valence': 0.3,
-                'target_energy': 0.3,
-                'max_valence': 0.4,
-                'max_energy': 0.4,
-                'target_tempo': 80
-            },
-            'energetic': {
-                'seed_genres': ['dance', 'electronic'],
-                'target_valence': 0.7,
-                'target_energy': 0.9,
-                'min_energy': 0.8,
-                'target_tempo': 130
-            },
-            'calm': {
-                'seed_genres': ['ambient', 'classical'],
-                'target_valence': 0.5,
-                'target_energy': 0.2,
-                'max_energy': 0.3,
-                'target_tempo': 90
-            },
-            'romantic': {
-                'seed_genres': ['jazz', 'soul'],
-                'target_valence': 0.6,
-                'target_energy': 0.4,
-                'target_tempo': 100
-            }
+            'happy': {'seed_genres': ['pop']},
+            'sad': {'seed_genres': ['acoustic']},
+            'energetic': {'seed_genres': ['dance']},
+            'calm': {'seed_genres': ['classical']},
+            'romantic': {'seed_genres': ['jazz']}
         }
 
         if mood not in mood_settings:
@@ -380,17 +349,9 @@ def get_mood_recommendations():
             market = user_info.get('country', 'US')
             print(f"User market: {market}")
 
-            # Get recommendations using genres and audio features
+            # Get recommendations with minimal parameters
             recommendations = sp.recommendations(
                 seed_genres=settings['seed_genres'],
-                target_valence=settings.get('target_valence', 0.5),
-                target_energy=settings.get('target_energy', 0.5),
-                min_valence=settings.get('min_valence', 0),
-                max_valence=settings.get('max_valence', 1),
-                min_energy=settings.get('min_energy', 0),
-                max_energy=settings.get('max_energy', 1),
-                target_tempo=settings.get('target_tempo', 120),
-                min_popularity=30,
                 market=market,
                 limit=20
             )
