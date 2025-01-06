@@ -331,33 +331,13 @@ def get_mood_recommendations():
         mood = data['mood'].lower()
         print(f"Getting recommendations for mood: {mood}")
 
-        # Map moods to seed artists and tracks
+        # Map moods to search queries
         mood_settings = {
-            'happy': {
-                'artists': ['2DaxqgrOhkeH0fpeiQq2f4'],  # Pharrell Williams
-                'tracks': ['60nZcImufyMA1MKQY3dcCH'],   # Happy
-                'query': 'happy upbeat'
-            },
-            'sad': {
-                'artists': ['4dpARuHxo51G3z768sgnrY'],  # Adele
-                'tracks': ['4NHQUGzhtTLFvgF5SZesLK'],   # Someone Like You
-                'query': 'sad emotional'
-            },
-            'energetic': {
-                'artists': ['1HY2Jd0NmPuamShAr6KMms'],  # Lady Gaga
-                'tracks': ['7qiZfU4dY1lWllzX7mPBI3'],   # Shape of You
-                'query': 'dance party'
-            },
-            'calm': {
-                'artists': ['4NJhFmfw43RLBLjQvxDuRS'],  # Enya
-                'tracks': ['3U4isOIWM3VvDubwSI3y7a'],   # River Flows in You
-                'query': 'relaxing ambient'
-            },
-            'romantic': {
-                'artists': ['7dGJo4pcD2V6oG8kP0tJRR'],  # Ed Sheeran
-                'tracks': ['0V3wPSX9ygBnCm8psDIegu'],   # Perfect
-                'query': 'romantic love'
-            }
+            'happy': {'query': 'happy upbeat dance pop'},
+            'sad': {'query': 'sad emotional ballad piano'},
+            'energetic': {'query': 'dance party edm upbeat'},
+            'calm': {'query': 'calm relaxing ambient peaceful'},
+            'romantic': {'query': 'romantic love ballad sweet'}
         }
 
         if mood not in mood_settings:
@@ -373,30 +353,45 @@ def get_mood_recommendations():
             market = user_info.get('country', 'US')
             print(f"User market: {market}")
 
-            # First search for some additional tracks
+            # Search for tracks with the mood query
             print(f"Searching for tracks with query: {settings['query']}")
             search_results = sp.search(
                 settings['query'],
                 type='track',
                 market=market,
-                limit=3
+                limit=10
             )
 
-            additional_tracks = []
-            if search_results and 'tracks' in search_results:
-                additional_tracks = [track['id'] for track in search_results['tracks']['items'][:1]]
-                print(f"Found additional tracks: {additional_tracks}")
+            if not search_results or 'tracks' not in search_results or not search_results['tracks']['items']:
+                print("No search results found")
+                return jsonify({'error': 'No tracks found for the mood'}), 404
 
-            # Combine preset and searched tracks
-            all_tracks = settings['tracks'] + additional_tracks
-            print(f"Using tracks: {all_tracks}")
+            # Get a valid seed track
+            seed_track = None
+            for track in search_results['tracks']['items']:
+                try:
+                    # Verify the track exists and is playable
+                    track_info = sp.track(track['id'], market=market)
+                    if track_info and track_info.get('is_playable', True):
+                        seed_track = track['id']
+                        print(f"Found valid seed track: {track['name']} by {track['artists'][0]['name']}")
+                        break
+                except Exception as e:
+                    print(f"Error checking track {track['id']}: {str(e)}")
+                    continue
 
-            # Get recommendations using both artists and tracks
+            if not seed_track:
+                print("No valid seed track found")
+                return jsonify({'error': 'Could not find a valid seed track'}), 404
+
+            print(f"Using seed track: {seed_track}")
+
+            # Get recommendations using just one seed track
             recommendations = sp.recommendations(
-                seed_artists=settings['artists'][:1],
-                seed_tracks=all_tracks[:2],  # Use at most 2 tracks
+                seed_tracks=[seed_track],
+                limit=20,
                 market=market,
-                limit=20
+                min_popularity=20  # Add some popularity filter to get better tracks
             )
             
             if not recommendations or 'tracks' not in recommendations:
@@ -406,18 +401,20 @@ def get_mood_recommendations():
             tracks = []
             for track in recommendations['tracks']:
                 try:
-                    track_data = {
-                        'id': track['id'],
-                        'name': track['name'],
-                        'artist': track['artists'][0]['name'] if track['artists'] else 'Unknown Artist',
-                        'album': track['album']['name'] if track['album'] else 'Unknown Album',
-                        'album_image': track['album']['images'][0]['url'] if track['album'].get('images') else None,
-                        'preview_url': track['preview_url'],
-                        'external_url': track['external_urls'].get('spotify', ''),
-                        'uri': track['uri']
-                    }
-                    tracks.append(track_data)
-                    print(f"Found track: {track_data['name']} by {track_data['artist']}")
+                    # Only add tracks that are playable
+                    if track.get('is_playable', True):
+                        track_data = {
+                            'id': track['id'],
+                            'name': track['name'],
+                            'artist': track['artists'][0]['name'] if track['artists'] else 'Unknown Artist',
+                            'album': track['album']['name'] if track['album'] else 'Unknown Album',
+                            'album_image': track['album']['images'][0]['url'] if track['album'].get('images') else None,
+                            'preview_url': track['preview_url'],
+                            'external_url': track['external_urls'].get('spotify', ''),
+                            'uri': track['uri']
+                        }
+                        tracks.append(track_data)
+                        print(f"Found track: {track_data['name']} by {track_data['artist']}")
                 except Exception as e:
                     print(f"Error processing track: {str(e)}")
                     continue
