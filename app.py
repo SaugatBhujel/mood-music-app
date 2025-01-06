@@ -331,13 +331,33 @@ def get_mood_recommendations():
         mood = data['mood'].lower()
         print(f"Getting recommendations for mood: {mood}")
 
-        # Map moods to search queries
+        # Map moods to seed artists and tracks
         mood_settings = {
-            'happy': {'query': 'happy upbeat'},
-            'sad': {'query': 'sad emotional ballad'},
-            'energetic': {'query': 'dance party energetic'},
-            'calm': {'query': 'calm relaxing ambient'},
-            'romantic': {'query': 'romantic love song'}
+            'happy': {
+                'artists': ['2DaxqgrOhkeH0fpeiQq2f4'],  # Pharrell Williams
+                'tracks': ['60nZcImufyMA1MKQY3dcCH'],   # Happy
+                'query': 'happy upbeat'
+            },
+            'sad': {
+                'artists': ['4dpARuHxo51G3z768sgnrY'],  # Adele
+                'tracks': ['4NHQUGzhtTLFvgF5SZesLK'],   # Someone Like You
+                'query': 'sad emotional'
+            },
+            'energetic': {
+                'artists': ['1HY2Jd0NmPuamShAr6KMms'],  # Lady Gaga
+                'tracks': ['7qiZfU4dY1lWllzX7mPBI3'],   # Shape of You
+                'query': 'dance party'
+            },
+            'calm': {
+                'artists': ['4NJhFmfw43RLBLjQvxDuRS'],  # Enya
+                'tracks': ['3U4isOIWM3VvDubwSI3y7a'],   # River Flows in You
+                'query': 'relaxing ambient'
+            },
+            'romantic': {
+                'artists': ['7dGJo4pcD2V6oG8kP0tJRR'],  # Ed Sheeran
+                'tracks': ['0V3wPSX9ygBnCm8psDIegu'],   # Perfect
+                'query': 'romantic love'
+            }
         }
 
         if mood not in mood_settings:
@@ -348,25 +368,34 @@ def get_mood_recommendations():
         print(f"Using settings: {settings}")
 
         try:
-            # First search for tracks matching the mood
+            # Get user's market
+            user_info = sp.current_user()
+            market = user_info.get('country', 'US')
+            print(f"User market: {market}")
+
+            # First search for some additional tracks
             print(f"Searching for tracks with query: {settings['query']}")
             search_results = sp.search(
                 settings['query'],
                 type='track',
-                limit=5
+                market=market,
+                limit=3
             )
-            
-            if not search_results or 'tracks' not in search_results:
-                print("No search results found")
-                return jsonify({'error': 'No tracks found'}), 404
 
-            # Get seed tracks from search results
-            seed_tracks = [track['id'] for track in search_results['tracks']['items'][:2]]
-            print(f"Using seed tracks: {seed_tracks}")
+            additional_tracks = []
+            if search_results and 'tracks' in search_results:
+                additional_tracks = [track['id'] for track in search_results['tracks']['items'][:1]]
+                print(f"Found additional tracks: {additional_tracks}")
 
-            # Get recommendations using the seed tracks
+            # Combine preset and searched tracks
+            all_tracks = settings['tracks'] + additional_tracks
+            print(f"Using tracks: {all_tracks}")
+
+            # Get recommendations using both artists and tracks
             recommendations = sp.recommendations(
-                seed_tracks=seed_tracks,
+                seed_artists=settings['artists'][:1],
+                seed_tracks=all_tracks[:2],  # Use at most 2 tracks
+                market=market,
                 limit=20
             )
             
