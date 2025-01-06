@@ -300,7 +300,8 @@ def get_mood_recommendations():
         
         # Verify the token works
         try:
-            sp.current_user()
+            user = sp.current_user()
+            print(f"User verified: {user['id']}")
         except Exception as e:
             print(f"Token verification failed: {str(e)}")
             session.pop('token_info', None)
@@ -308,78 +309,97 @@ def get_mood_recommendations():
 
         data = request.get_json()
         if not data or 'mood' not in data:
+            print("No mood provided in request")
             return jsonify({'error': 'No mood provided'}), 400
 
         mood = data['mood'].lower()
         print(f"Getting recommendations for mood: {mood}")
 
-        # Map moods to playlist search terms
-        mood_playlists = {
-            'happy': ['Happy', 'Feel Good', 'Party'],
-            'sad': ['Sad', 'Melancholy', 'Heartbreak'],
-            'energetic': ['Workout', 'Dance', 'Energy'],
-            'calm': ['Chill', 'Relax', 'Sleep'],
-            'romantic': ['Romance', 'Love Songs', 'Date Night']
+        # Map moods to Spotify seed genres and audio features
+        mood_settings = {
+            'happy': {
+                'seed_genres': ['pop', 'happy', 'dance'],
+                'target_valence': 0.8,
+                'target_energy': 0.7,
+                'limit': 20
+            },
+            'sad': {
+                'seed_genres': ['sad', 'acoustic', 'indie'],
+                'target_valence': 0.2,
+                'target_energy': 0.3,
+                'limit': 20
+            },
+            'energetic': {
+                'seed_genres': ['dance', 'electronic', 'workout'],
+                'target_valence': 0.7,
+                'target_energy': 0.9,
+                'limit': 20
+            },
+            'calm': {
+                'seed_genres': ['ambient', 'chill', 'sleep'],
+                'target_valence': 0.5,
+                'target_energy': 0.2,
+                'limit': 20
+            },
+            'romantic': {
+                'seed_genres': ['romance', 'jazz', 'r-n-b'],
+                'target_valence': 0.6,
+                'target_energy': 0.4,
+                'limit': 20
+            }
         }
 
-        if mood not in mood_playlists:
+        if mood not in mood_settings:
+            print(f"Invalid mood: {mood}")
             return jsonify({'error': 'Invalid mood'}), 400
 
-        try:
-            all_tracks = []
-            search_terms = mood_playlists[mood]
-            
-            # Search for playlists matching the mood
-            for term in search_terms:
-                print(f"Searching playlists with term: {term}")
-                playlists = sp.search(q=term, type='playlist', limit=2)
-                
-                if playlists and 'playlists' in playlists and playlists['playlists']['items']:
-                    for playlist in playlists['playlists']['items']:
-                        try:
-                            # Get tracks from each playlist
-                            results = sp.playlist_tracks(
-                                playlist['id'],
-                                fields='items(track(id,name,artists,album,preview_url,external_urls,popularity))',
-                                limit=10
-                            )
-                            
-                            if results and 'items' in results:
-                                for item in results['items']:
-                                    if item['track']:
-                                        track = item['track']
-                                        track_data = {
-                                            'id': track['id'],
-                                            'name': track['name'],
-                                            'artist': track['artists'][0]['name'] if track['artists'] else 'Unknown Artist',
-                                            'album': track['album']['name'] if track['album'] else 'Unknown Album',
-                                            'album_image': track['album']['images'][0]['url'] if track['album'].get('images') else None,
-                                            'preview_url': track['preview_url'],
-                                            'external_url': track['external_urls'].get('spotify', ''),
-                                            'popularity': track.get('popularity', 0)
-                                        }
-                                        if track_data not in all_tracks:  # Avoid duplicates
-                                            all_tracks.append(track_data)
-                                            print(f"Found track: {track_data['name']} by {track_data['artist']}")
-                        except Exception as e:
-                            print(f"Error getting playlist tracks: {str(e)}")
-                            continue
+        settings = mood_settings[mood]
+        print(f"Using settings: {settings}")
 
-            if not all_tracks:
-                print("No tracks found in playlists")
+        try:
+            # Get recommendations based on mood settings
+            recommendations = sp.recommendations(
+                seed_genres=settings['seed_genres'],
+                target_valence=settings['target_valence'],
+                target_energy=settings['target_energy'],
+                limit=settings['limit']
+            )
+            
+            if not recommendations or 'tracks' not in recommendations:
+                print("No recommendations found")
                 return jsonify({'error': 'No tracks found'}), 404
 
-            # Sort by popularity and take top 20
-            all_tracks.sort(key=lambda x: x.get('popularity', 0), reverse=True)
-            selected_tracks = all_tracks[:20]
+            tracks = []
+            for track in recommendations['tracks']:
+                try:
+                    track_data = {
+                        'id': track['id'],
+                        'name': track['name'],
+                        'artist': track['artists'][0]['name'] if track['artists'] else 'Unknown Artist',
+                        'album': track['album']['name'] if track['album'] else 'Unknown Album',
+                        'album_image': track['album']['images'][0]['url'] if track['album'].get('images') else None,
+                        'preview_url': track['preview_url'],
+                        'external_url': track['external_urls'].get('spotify', ''),
+                        'uri': track['uri']
+                    }
+                    tracks.append(track_data)
+                    print(f"Found track: {track_data['name']} by {track_data['artist']}")
+                except Exception as e:
+                    print(f"Error processing track: {str(e)}")
+                    continue
 
+            if not tracks:
+                print("No valid tracks found")
+                return jsonify({'error': 'No valid tracks found'}), 404
+
+            print(f"Returning {len(tracks)} tracks")
             return jsonify({
-                'tracks': selected_tracks,
-                'message': f'Found {len(selected_tracks)} tracks for {mood} mood'
+                'tracks': tracks,
+                'message': f'Found {len(tracks)} tracks for {mood} mood'
             })
 
         except Exception as e:
-            print(f"Error in playlist search: {str(e)}")
+            print(f"Error getting recommendations: {str(e)}")
             return jsonify({'error': f'Failed to get tracks: {str(e)}'}), 500
 
     except Exception as e:
@@ -402,7 +422,8 @@ def search_tracks():
         
         # Verify the token works
         try:
-            sp.current_user()
+            user = sp.current_user()
+            print(f"User verified: {user['id']}")
         except Exception as e:
             print(f"Token verification failed: {str(e)}")
             session.pop('token_info', None)
@@ -410,15 +431,22 @@ def search_tracks():
 
         data = request.get_json()
         if not data or 'query' not in data:
+            print("No search query provided")
             return jsonify({'error': 'No search query provided'}), 400
 
         query = data['query']
         print(f"Searching for: {query}")
 
-        # Search for tracks
-        results = sp.search(q=query, type='track', limit=20)
+        # Search for tracks with market and popularity filters
+        results = sp.search(
+            q=query,
+            type='track',
+            market='US',  # Add market parameter
+            limit=20
+        )
         
-        if not results or 'tracks' not in results:
+        if not results or 'tracks' not in results or not results['tracks']['items']:
+            print("No results found")
             return jsonify({'error': 'No results found'}), 404
 
         tracks = []
@@ -431,13 +459,22 @@ def search_tracks():
                     'album': track['album']['name'] if track['album'] else 'Unknown Album',
                     'album_image': track['album']['images'][0]['url'] if track['album'].get('images') else None,
                     'preview_url': track['preview_url'],
-                    'external_url': track['external_urls'].get('spotify', '')
+                    'external_url': track['external_urls'].get('spotify', ''),
+                    'uri': track['uri']
                 }
                 tracks.append(track_data)
-                print(f"Found track: {track_data['name']}")
+                print(f"Found track: {track_data['name']} by {track_data['artist']}")
             except Exception as e:
                 print(f"Error processing track: {str(e)}")
                 continue
+
+        if not tracks:
+            print("No valid tracks found")
+            return jsonify({'error': 'No valid tracks found'}), 404
+
+        # Sort by popularity if available
+        tracks.sort(key=lambda x: x.get('popularity', 0), reverse=True)
+        print(f"Returning {len(tracks)} tracks")
 
         return jsonify({
             'tracks': tracks,

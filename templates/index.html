@@ -1156,13 +1156,20 @@
                 if (data.tracks && data.tracks.length > 0) {
                     displaySongs(data.tracks);
                 } else {
-                    showAlert('No songs found for this mood. Try another mood!');
+                    showAlert('No songs found for this mood. Try another mood!', 'warning');
                 }
             })
             .catch(error => {
                 hideLoading();
-                showAlert(error.message || 'Failed to get recommendations');
                 console.error('Error:', error);
+                if (error.message.toLowerCase().includes('login')) {
+                    showAlert('Please login to Spotify first', 'warning');
+                    setTimeout(() => {
+                        window.location.href = '/spotify-login';
+                    }, 2000);
+                } else {
+                    showAlert(error.message || 'Failed to get recommendations', 'error');
+                }
             })
             .finally(() => {
                 // Restore button state
@@ -1176,6 +1183,62 @@
                 });
             });
         }
+
+        function handleSearch() {
+            const searchInput = document.getElementById('searchInput');
+            const query = searchInput.value.trim();
+            
+            if (!query) {
+                showAlert('Please enter a search term', 'warning');
+                return;
+            }
+
+            showLoading();
+            clearResults();
+            
+            fetch('/api/search', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ query: query })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => {
+                        throw new Error(err.error || 'Search failed');
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                hideLoading();
+                if (data.tracks && data.tracks.length > 0) {
+                    displaySongs(data.tracks);
+                } else {
+                    showAlert('No songs found. Try a different search!', 'warning');
+                }
+            })
+            .catch(error => {
+                hideLoading();
+                console.error('Error:', error);
+                if (error.message.toLowerCase().includes('login')) {
+                    showAlert('Please login to Spotify first', 'warning');
+                    setTimeout(() => {
+                        window.location.href = '/spotify-login';
+                    }, 2000);
+                } else {
+                    showAlert(error.message || 'Search failed', 'error');
+                }
+            });
+        }
+
+        // Add event listener for search input
+        document.getElementById('searchInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                handleSearch();
+            }
+        });
 
         function displaySongs(songs) {
             const resultsDiv = document.getElementById('resultsArea');
