@@ -42,7 +42,7 @@ def load_user(user_id):
 SPOTIPY_CLIENT_ID = os.getenv('SPOTIFY_CLIENT_ID')
 SPOTIPY_CLIENT_SECRET = os.getenv('SPOTIFY_CLIENT_SECRET')
 SPOTIPY_REDIRECT_URI = 'https://mood-music-app-uwtu.onrender.com/callback'  # Hardcoding to ensure exact match
-SPOTIFY_SCOPE = 'user-library-read playlist-modify-public user-top-read streaming user-read-email user-read-private user-read-playback-state user-modify-playback-state'
+SPOTIFY_SCOPE = 'user-library-read playlist-modify-public playlist-modify-private user-read-private user-read-email'
 
 mood_detector = MoodDetector()
 
@@ -327,23 +327,13 @@ def get_mood_recommendations():
         mood = data['mood'].lower()
         print(f"Getting recommendations for mood: {mood}")
 
-        # Map moods to popular seed tracks
+        # Map moods to search queries
         mood_settings = {
-            'happy': {
-                'seed_tracks': ['4Cy0NHJ8Gh0xMdwyM9RkQm']  # "Good Life" by OneRepublic
-            },
-            'sad': {
-                'seed_tracks': ['4NhDYoQTYCdWHTvlbGVgwo']  # "Say You Won't Let Go" by James Arthur
-            },
-            'energetic': {
-                'seed_tracks': ['0CAfXk7DXMnon4gLudAp7J']  # "Can't Hold Us" by Macklemore
-            },
-            'calm': {
-                'seed_tracks': ['4NpFxQe2UvRCAjto3JqlSl']  # "River Flows in You" by Yiruma
-            },
-            'romantic': {
-                'seed_tracks': ['0tgVpDi06FyKpA1z0VMD4v']  # "Perfect" by Ed Sheeran
-            }
+            'happy': {'query': 'Good Life OneRepublic'},
+            'sad': {'query': 'Say You Won\'t Let Go James Arthur'},
+            'energetic': {'query': 'Can\'t Hold Us Macklemore'},
+            'calm': {'query': 'River Flows in You Yiruma'},
+            'romantic': {'query': 'Perfect Ed Sheeran'}
         }
 
         if mood not in mood_settings:
@@ -359,18 +349,31 @@ def get_mood_recommendations():
             market = user_info.get('country', 'US')
             print(f"User market: {market}")
 
-            # First verify the seed track exists
-            seed_track = settings['seed_tracks'][0]
-            try:
-                track_info = sp.track(seed_track)
-                print(f"Seed track verified: {track_info['name']} by {track_info['artists'][0]['name']}")
-            except Exception as e:
-                print(f"Error verifying seed track: {str(e)}")
-                # Use a fallback track if the seed track fails
-                seed_track = '06JvOZ39sK8D8SqiqfaxDU'  # "Shape of You" by Ed Sheeran as fallback
-                print("Using fallback seed track")
+            # Search for the track first
+            search_results = sp.search(
+                settings['query'],
+                type='track',
+                market=market,
+                limit=1
+            )
 
-            # Get recommendations using the seed track
+            if not search_results or not search_results['tracks']['items']:
+                print("No search results found")
+                # Fallback to a very popular song
+                search_results = sp.search(
+                    'Shape of You Ed Sheeran',
+                    type='track',
+                    market=market,
+                    limit=1
+                )
+
+            if not search_results or not search_results['tracks']['items']:
+                return jsonify({'error': 'Could not find seed track'}), 404
+
+            seed_track = search_results['tracks']['items'][0]['id']
+            print(f"Using seed track: {search_results['tracks']['items'][0]['name']}")
+
+            # Get recommendations using the found track
             recommendations = sp.recommendations(
                 seed_tracks=[seed_track],
                 market=market,
