@@ -319,7 +319,7 @@ def get_mood_recommendations():
         # Using only valid Spotify genres
         mood_settings = {
             'happy': {
-                'seed_genres': ['pop', 'dance', 'disco'],
+                'seed_genres': ['pop', 'dance'],
                 'target_valence': 0.8,
                 'target_energy': 0.7,
                 'min_valence': 0.6,
@@ -327,7 +327,7 @@ def get_mood_recommendations():
                 'limit': 20
             },
             'sad': {
-                'seed_genres': ['piano', 'indie-pop', 'folk'],
+                'seed_genres': ['piano', 'acoustic'],
                 'target_valence': 0.2,
                 'target_energy': 0.3,
                 'max_valence': 0.4,
@@ -335,21 +335,21 @@ def get_mood_recommendations():
                 'limit': 20
             },
             'energetic': {
-                'seed_genres': ['edm', 'dance', 'electro'],
+                'seed_genres': ['electronic', 'dance'],
                 'target_valence': 0.7,
                 'target_energy': 0.9,
                 'min_energy': 0.7,
                 'limit': 20
             },
             'calm': {
-                'seed_genres': ['ambient', 'classical', 'study'],
+                'seed_genres': ['ambient', 'classical'],
                 'target_valence': 0.5,
                 'target_energy': 0.2,
                 'max_energy': 0.4,
                 'limit': 20
             },
             'romantic': {
-                'seed_genres': ['jazz', 'soul', 'r-n-b'],
+                'seed_genres': ['jazz', 'soul'],
                 'target_valence': 0.6,
                 'target_energy': 0.4,
                 'limit': 20
@@ -364,22 +364,9 @@ def get_mood_recommendations():
         print(f"Using settings: {settings}")
 
         try:
-            # Get available genres first
-            available_genres = sp.recommendation_genre_seeds()
-            print(f"Available genres: {available_genres}")
-
-            # Filter to use only available genres
-            valid_genres = [genre for genre in settings['seed_genres'] if genre in available_genres['genres']]
-            if not valid_genres:
-                valid_genres = ['pop']  # Fallback to pop if no valid genres
-            
-            # Limit to max 5 seed genres as per Spotify API
-            valid_genres = valid_genres[:5]
-            print(f"Using genres: {valid_genres}")
-
             # Get recommendations based on mood settings
             recommendations = sp.recommendations(
-                seed_genres=valid_genres,
+                seed_genres=settings['seed_genres'][:2],  # Use only 2 genres to be safe
                 target_valence=settings['target_valence'],
                 target_energy=settings['target_energy'],
                 min_valence=settings.get('min_valence', 0),
