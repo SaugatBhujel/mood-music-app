@@ -304,13 +304,9 @@ def get_mood_recommendations():
             user = sp.current_user()
             print(f"User verified: {user['id']}")
             
-            # Test API with a simple search first
+            # Test API with a simple search
             test_search = sp.search('test', limit=1, type='track')
             print("Search API test successful")
-            
-            # Get available genres to verify API access
-            genres = sp.recommendation_genre_seeds()
-            print(f"Available genres: {genres}")
             
         except spotipy.exceptions.SpotifyException as e:
             print(f"Spotify API error: {str(e)}")
@@ -335,13 +331,13 @@ def get_mood_recommendations():
         mood = data['mood'].lower()
         print(f"Getting recommendations for mood: {mood}")
 
-        # Simplified mood settings with just one genre
+        # Map moods to search queries
         mood_settings = {
-            'happy': {'seed_track': '4C2WNqXjLoZe4FhOdbDSyQ'},  # Use Happy by Pharrell as seed
-            'sad': {'seed_track': '4NHQUGzhtTLFvgF5SZesLK'},   # Use Someone Like You by Adele as seed
-            'energetic': {'seed_track': '1Je1IMUlBXcx1Fz0WE7oPT'}, # Use Wannabe by Spice Girls as seed
-            'calm': {'seed_track': '3U4isOIWM3VvDubwSI3y7a'},    # Use River Flows in You by Yiruma as seed
-            'romantic': {'seed_track': '4NpFxQe2UvRCAjto3JqlSl'}  # Use At Last by Etta James as seed
+            'happy': {'query': 'happy upbeat'},
+            'sad': {'query': 'sad emotional ballad'},
+            'energetic': {'query': 'dance party energetic'},
+            'calm': {'query': 'calm relaxing ambient'},
+            'romantic': {'query': 'romantic love song'}
         }
 
         if mood not in mood_settings:
@@ -352,9 +348,25 @@ def get_mood_recommendations():
         print(f"Using settings: {settings}")
 
         try:
-            # Get recommendations using seed tracks instead of genres
+            # First search for tracks matching the mood
+            print(f"Searching for tracks with query: {settings['query']}")
+            search_results = sp.search(
+                settings['query'],
+                type='track',
+                limit=5
+            )
+            
+            if not search_results or 'tracks' not in search_results:
+                print("No search results found")
+                return jsonify({'error': 'No tracks found'}), 404
+
+            # Get seed tracks from search results
+            seed_tracks = [track['id'] for track in search_results['tracks']['items'][:2]]
+            print(f"Using seed tracks: {seed_tracks}")
+
+            # Get recommendations using the seed tracks
             recommendations = sp.recommendations(
-                seed_tracks=[settings['seed_track']],
+                seed_tracks=seed_tracks,
                 limit=20
             )
             
