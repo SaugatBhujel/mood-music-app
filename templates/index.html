@@ -787,7 +787,7 @@
             height: 20px;
             margin: -10px 0 0 -10px;
             border: 2px solid rgba(255, 255, 255, 0.3);
-            border-top-color: #fff;
+            border-left-color: #fff;
             border-radius: 50%;
             animation: spin 0.8s linear infinite;
             transform-origin: center center;
@@ -875,6 +875,114 @@
             0% { box-shadow: 0 0 5px rgba(29, 185, 84, 0.5); }
             50% { box-shadow: 0 0 20px rgba(29, 185, 84, 0.8); }
             100% { box-shadow: 0 0 5px rgba(29, 185, 84, 0.5); }
+        }
+
+        /* Playlist Creation Section */
+        .playlist-section {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(18, 18, 18, 0.95);
+            padding: 20px;
+            box-shadow: 0 -5px 20px rgba(0, 0, 0, 0.3);
+            transform: translateY(100%);
+            transition: transform 0.3s ease;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+        }
+
+        .playlist-section.active {
+            transform: translateY(0);
+        }
+
+        .playlist-form {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            justify-content: center;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .playlist-input {
+            flex: 1;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 25px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            font-size: 1em;
+        }
+
+        .playlist-input:focus {
+            outline: none;
+            box-shadow: 0 0 0 2px #1DB954;
+        }
+
+        .create-playlist-btn {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 25px;
+            background: #1DB954;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .create-playlist-btn:hover {
+            transform: scale(1.05);
+            background: #1ed760;
+        }
+
+        .create-playlist-btn:disabled {
+            background: #1db95480;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .selected-count {
+            color: #1DB954;
+            font-weight: 600;
+            margin-right: 15px;
+        }
+
+        /* Song Selection Styles */
+        .song-card {
+            position: relative;
+        }
+
+        .select-song-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            background: rgba(0, 0, 0, 0.5);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            z-index: 2;
+        }
+
+        .select-song-btn:hover {
+            border-color: #1DB954;
+            background: rgba(29, 185, 84, 0.3);
+        }
+
+        .select-song-btn.selected {
+            background: #1DB954;
+            border-color: #1DB954;
+        }
+
+        .song-card.selected {
+            box-shadow: 0 0 0 2px #1DB954;
         }
     </style>
 </head>
@@ -996,6 +1104,17 @@
         {% endif %}
     </div>
 
+    <!-- Playlist Creation Section -->
+    <div class="playlist-section" id="playlistSection">
+        <div class="playlist-form">
+            <span class="selected-count">0 songs selected</span>
+            <input type="text" class="playlist-input" id="playlistName" placeholder="Enter playlist name...">
+            <button class="create-playlist-btn" onclick="createPlaylist()" disabled>
+                Create Playlist
+            </button>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         let selectedTracks = new Set();
@@ -1065,8 +1184,13 @@
             songs.forEach(song => {
                 const songCard = document.createElement('div');
                 songCard.className = 'song-card';
+                songCard.dataset.trackId = song.id;
+                songCard.dataset.trackUri = song.uri;
                 
                 songCard.innerHTML = `
+                    <div class="select-song-btn" onclick="toggleSongSelection('${song.id}', '${song.name.replace(/'/g, "\\'")}', '${song.artist.replace(/'/g, "\\'")}')">
+                        <i class="fas ${selectedTracks.has(song.id) ? 'fa-check' : 'fa-plus'}"></i>
+                    </div>
                     <img class="song-image" src="${song.album_image || 'default-album-art.jpg'}" alt="${song.album} Cover">
                     <div class="song-info">
                         <h3 class="song-title">${song.name}</h3>
@@ -1082,60 +1206,136 @@
                                 </button>`
                             }
                             <a href="${song.external_url}" class="spotify-btn" target="_blank">
-                                <i class="fab fa-spotify"></i> Listen
+                                <i class="fab fa-spotify"></i> Listen on Spotify
                             </a>
                         </div>
                     </div>
                 `;
                 
+                if (selectedTracks.has(song.id)) {
+                    songCard.classList.add('selected');
+                }
+                
                 resultsDiv.appendChild(songCard);
             });
-        }
-
-        function playPreview(url, button) {
-            const audio = document.querySelector('audio') || new Audio();
             
-            // Stop all other previews
-            document.querySelectorAll('.preview-btn').forEach(btn => {
-                if (btn !== button) {
-                    btn.innerHTML = '<i class="fas fa-play"></i> Preview';
-                }
-            });
+            updatePlaylistSection();
+        }
 
-            if (audio.src === url && !audio.paused) {
-                audio.pause();
-                button.innerHTML = '<i class="fas fa-play"></i> Preview';
+        function toggleSongSelection(trackId, name, artist) {
+            const songCard = document.querySelector(`.song-card[data-track-id="${trackId}"]`);
+            const selectBtn = songCard.querySelector('.select-song-btn');
+            
+            if (selectedTracks.has(trackId)) {
+                selectedTracks.delete(trackId);
+                songCard.classList.remove('selected');
+                selectBtn.innerHTML = '<i class="fas fa-plus"></i>';
             } else {
-                audio.src = url;
-                audio.play();
-                button.innerHTML = '<i class="fas fa-pause"></i> Pause';
+                selectedTracks.add(trackId);
+                songCard.classList.add('selected');
+                selectBtn.innerHTML = '<i class="fas fa-check"></i>';
+            }
+            
+            updatePlaylistSection();
+        }
+
+        function updatePlaylistSection() {
+            const playlistSection = document.getElementById('playlistSection');
+            const createBtn = document.querySelector('.create-playlist-btn');
+            const countSpan = document.querySelector('.selected-count');
+            
+            if (selectedTracks.size > 0) {
+                playlistSection.classList.add('active');
+                createBtn.disabled = false;
+                countSpan.textContent = `${selectedTracks.size} song${selectedTracks.size === 1 ? '' : 's'} selected`;
+            } else {
+                playlistSection.classList.remove('active');
+                createBtn.disabled = true;
+                countSpan.textContent = '0 songs selected';
             }
         }
 
-        function showLoading() {
-            document.querySelector('.loading-animation').classList.add('active');
-        }
-
-        function hideLoading() {
-            document.querySelector('.loading-animation').classList.remove('active');
-        }
-
-        function clearResults() {
-            const resultsDiv = document.getElementById('resultsArea');
-            if (resultsDiv) {
-                resultsDiv.innerHTML = '';
+        function createPlaylist() {
+            const playlistName = document.getElementById('playlistName').value.trim();
+            if (!playlistName) {
+                showAlert('Please enter a playlist name', 'warning');
+                return;
             }
+            
+            if (selectedTracks.size === 0) {
+                showAlert('Please select at least one song', 'warning');
+                return;
+            }
+            
+            const createBtn = document.querySelector('.create-playlist-btn');
+            const originalBtnText = createBtn.innerHTML;
+            createBtn.disabled = true;
+            createBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating...';
+            
+            fetch('/api/create-playlist', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    name: playlistName,
+                    tracks: Array.from(selectedTracks)
+                })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => {
+                        throw new Error(err.error || 'Failed to create playlist');
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                showAlert(`Playlist "${playlistName}" created successfully! Opening in Spotify...`, 'success');
+                selectedTracks.clear();
+                updatePlaylistSection();
+                
+                // Clear all selected songs
+                document.querySelectorAll('.song-card.selected').forEach(card => {
+                    card.classList.remove('selected');
+                    card.querySelector('.select-song-btn i').className = 'fas fa-plus';
+                });
+                
+                // Open the playlist in Spotify
+                if (data.playlist_url) {
+                    setTimeout(() => {
+                        window.open(data.playlist_url, '_blank');
+                    }, 1500);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                if (error.message.toLowerCase().includes('login')) {
+                    showAlert('Please login to Spotify first', 'warning');
+                    setTimeout(() => {
+                        window.location.href = '/spotify-login';
+                    }, 2000);
+                } else {
+                    showAlert(error.message || 'Failed to create playlist', 'error');
+                }
+            })
+            .finally(() => {
+                createBtn.disabled = false;
+                createBtn.innerHTML = originalBtnText;
+                document.getElementById('playlistName').value = '';
+            });
         }
 
-        function showAlert(message) {
+        function showAlert(message, type = 'error') {
             const alertDiv = document.createElement('div');
-            alertDiv.className = 'alert alert-warning';
+            alertDiv.className = `alert alert-${type}`;
             alertDiv.role = 'alert';
             alertDiv.textContent = message;
             
             const resultsDiv = document.getElementById('resultsArea');
-            resultsDiv.innerHTML = '';
-            resultsDiv.appendChild(alertDiv);
+            resultsDiv.insertAdjacentElement('beforebegin', alertDiv);
+            
+            setTimeout(() => alertDiv.remove(), 5000);
         }
     </script>
     <template id="song-template">

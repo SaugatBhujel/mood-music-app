@@ -462,10 +462,13 @@ def create_playlist():
             return jsonify({'error': 'Missing playlist name or tracks'}), 400
 
         playlist_name = data['name']
-        track_uris = data['tracks']
+        track_ids = data['tracks']  # These are just the IDs
 
-        if not track_uris:
+        if not track_ids:
             return jsonify({'error': 'No tracks selected'}), 400
+
+        # Convert track IDs to URIs
+        track_uris = [f'spotify:track:{track_id}' for track_id in track_ids]
 
         # Get user ID
         try:
@@ -481,15 +484,17 @@ def create_playlist():
                 user=user_id,
                 name=playlist_name,
                 public=True,
-                description=f'Created with Mood Music App'
+                description=f'Created with Mood Music App on {datetime.now().strftime("%Y-%m-%d")}'
             )
         except Exception as e:
             print(f"Failed to create playlist: {str(e)}")
             return jsonify({'error': 'Failed to create playlist'}), 500
 
-        # Add tracks to playlist
+        # Add tracks to playlist (in batches of 100 as per Spotify API limits)
         try:
-            sp.playlist_add_items(playlist['id'], track_uris)
+            for i in range(0, len(track_uris), 100):
+                batch = track_uris[i:i + 100]
+                sp.playlist_add_items(playlist['id'], batch)
         except Exception as e:
             print(f"Failed to add tracks: {str(e)}")
             return jsonify({'error': 'Failed to add tracks to playlist'}), 500
