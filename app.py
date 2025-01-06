@@ -327,13 +327,13 @@ def get_mood_recommendations():
         mood = data['mood'].lower()
         print(f"Getting recommendations for mood: {mood}")
 
-        # Map moods to search queries
+        # Map moods to artists
         mood_settings = {
-            'happy': {'query': 'Good Life OneRepublic'},
-            'sad': {'query': 'Say You Won\'t Let Go James Arthur'},
-            'energetic': {'query': 'Can\'t Hold Us Macklemore'},
-            'calm': {'query': 'River Flows in You Yiruma'},
-            'romantic': {'query': 'Perfect Ed Sheeran'}
+            'happy': {'artist': 'Pharrell Williams'},
+            'sad': {'artist': 'Adele'},
+            'energetic': {'artist': 'David Guetta'},
+            'calm': {'artist': 'Ludovico Einaudi'},
+            'romantic': {'artist': 'Ed Sheeran'}
         }
 
         if mood not in mood_settings:
@@ -349,33 +349,48 @@ def get_mood_recommendations():
             market = user_info.get('country', 'US')
             print(f"User market: {market}")
 
-            # Search for the track first
-            search_results = sp.search(
-                settings['query'],
-                type='track',
+            # Search for the artist
+            print(f"Searching for artist: {settings['artist']}")
+            artist_results = sp.search(
+                settings['artist'],
+                type='artist',
                 market=market,
                 limit=1
             )
 
-            if not search_results or not search_results['tracks']['items']:
-                print("No search results found")
-                # Fallback to a very popular song
-                search_results = sp.search(
-                    'Shape of You Ed Sheeran',
-                    type='track',
+            if not artist_results or not artist_results['artists']['items']:
+                print("Artist search failed, using fallback artist")
+                artist_results = sp.search(
+                    'Taylor Swift',  # Fallback to a very popular artist
+                    type='artist',
                     market=market,
                     limit=1
                 )
 
-            if not search_results or not search_results['tracks']['items']:
-                return jsonify({'error': 'Could not find seed track'}), 404
+            if not artist_results or not artist_results['artists']['items']:
+                print("Could not find any artist")
+                return jsonify({'error': 'Could not find artist'}), 404
 
-            seed_track = search_results['tracks']['items'][0]['id']
-            print(f"Using seed track: {search_results['tracks']['items'][0]['name']}")
+            artist_id = artist_results['artists']['items'][0]['id']
+            artist_name = artist_results['artists']['items'][0]['name']
+            print(f"Found artist: {artist_name} ({artist_id})")
 
-            # Get recommendations using the found track
+            # Get the artist's top tracks
+            print(f"Getting top tracks for artist: {artist_name}")
+            top_tracks = sp.artist_top_tracks(artist_id, country=market)
+
+            if not top_tracks or not top_tracks['tracks']:
+                print("No top tracks found")
+                return jsonify({'error': 'No tracks found'}), 404
+
+            # Use the first top track as seed
+            seed_track = top_tracks['tracks'][0]['id']
+            print(f"Using seed track: {top_tracks['tracks'][0]['name']}")
+
+            # Get recommendations
+            print("Getting recommendations...")
             recommendations = sp.recommendations(
-                seed_tracks=[seed_track],
+                seed_artists=[artist_id],  # Use artist as seed instead of track
                 market=market,
                 limit=20
             )
@@ -407,19 +422,30 @@ def get_mood_recommendations():
                 print("No valid tracks found")
                 return jsonify({'error': 'No valid tracks found'}), 404
 
-            print(f"Returning {len(tracks)} tracks")
+            print(f"Successfully found {len(tracks)} tracks")
             return jsonify({
                 'tracks': tracks,
                 'message': f'Found {len(tracks)} tracks for {mood} mood'
             })
 
+        except spotipy.exceptions.SpotifyException as e:
+            error_msg = f"Spotify API error: {str(e)}"
+            print(error_msg)
+            print(f"Status code: {getattr(e, 'http_status', 'unknown')}")
+            print(f"Error code: {getattr(e, 'code', 'unknown')}")
+            print(f"Reason: {getattr(e, 'reason', 'unknown')}")
+            return jsonify({'error': error_msg}), 500
         except Exception as e:
-            print(f"Error getting recommendations: {str(e)}")
-            return jsonify({'error': f'Failed to get tracks: {str(e)}'}), 500
+            error_msg = f"Error getting recommendations: {str(e)}"
+            print(error_msg)
+            print(f"Error type: {type(e).__name__}")
+            return jsonify({'error': error_msg}), 500
 
     except Exception as e:
-        print(f"General error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        error_msg = f"General error: {str(e)}"
+        print(error_msg)
+        print(f"Error type: {type(e).__name__}")
+        return jsonify({'error': error_msg}), 500
 
 @app.route('/api/search', methods=['POST'])
 def search_tracks():
