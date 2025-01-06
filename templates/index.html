@@ -984,6 +984,93 @@
         .song-card.selected {
             box-shadow: 0 0 0 2px #1DB954;
         }
+
+        .loading-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 3rem;
+            text-align: center;
+        }
+
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 3px solid rgba(29, 185, 84, 0.3);
+            border-radius: 50%;
+            border-top-color: #1DB954;
+            animation: spin 1s linear infinite;
+            margin-bottom: 1rem;
+        }
+
+        .loading-text {
+            color: #fff;
+            font-size: 1.1rem;
+            margin: 0;
+            opacity: 0.9;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .alert {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            color: #fff;
+            font-weight: 500;
+            z-index: 1000;
+            animation: slideIn 0.3s ease-out;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            max-width: 400px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .alert i {
+            font-size: 1.25rem;
+        }
+
+        .alert.success {
+            background-color: #2ecc71;
+        }
+
+        .alert.warning {
+            background-color: #f1c40f;
+        }
+
+        .alert.error {
+            background-color: #e74c3c;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideOut {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+        }
     </style>
 </head>
 <body>
@@ -1118,9 +1205,36 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         let selectedTracks = new Set();
-        let searchTimeout;
+        let currentRequest = null;  // Track current fetch request
+
+        function showLoading() {
+            const resultsDiv = document.getElementById('resultsArea');
+            resultsDiv.innerHTML = `
+                <div class="loading-container">
+                    <div class="loading-spinner"></div>
+                    <p class="loading-text">Finding the perfect songs for you...</p>
+                </div>
+            `;
+        }
+
+        function hideLoading() {
+            const loadingContainer = document.querySelector('.loading-container');
+            if (loadingContainer) {
+                loadingContainer.remove();
+            }
+        }
+
+        function clearResults() {
+            const resultsDiv = document.getElementById('resultsArea');
+            resultsDiv.innerHTML = '';
+        }
 
         function getMoodRecommendations(mood) {
+            // Cancel previous request if exists
+            if (currentRequest) {
+                currentRequest.abort();
+            }
+
             // Show loading state on the clicked button
             const button = document.querySelector(`.mood-btn[onclick*="${mood}"]`);
             const originalContent = button.innerHTML;
@@ -1135,15 +1249,29 @@
 
             showLoading();
             clearResults();
+
+            // Create AbortController for this request
+            const controller = new AbortController();
+            currentRequest = controller;
             
+            // Set timeout for request
+            const timeoutId = setTimeout(() => {
+                controller.abort();
+                hideLoading();
+                showAlert('Request timed out. Please try again.', 'error');
+                resetButtons();
+            }, 30000); // 30 second timeout
+        
             fetch('/api/mood-based-recommendations', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ mood: mood })
+                body: JSON.stringify({ mood: mood }),
+                signal: controller.signal
             })
             .then(response => {
+                clearTimeout(timeoutId);
                 if (!response.ok) {
                     return response.json().then(err => {
                         throw new Error(err.error || 'Failed to get recommendations');
@@ -1160,9 +1288,12 @@
                 }
             })
             .catch(error => {
+                clearTimeout(timeoutId);
                 hideLoading();
                 console.error('Error:', error);
-                if (error.message.toLowerCase().includes('login')) {
+                if (error.name === 'AbortError') {
+                    showAlert('Request was cancelled. Please try again.', 'warning');
+                } else if (error.message.toLowerCase().includes('login')) {
                     showAlert('Please login to Spotify first', 'warning');
                     setTimeout(() => {
                         window.location.href = '/spotify-login';
@@ -1172,22 +1303,29 @@
                 }
             })
             .finally(() => {
-                // Restore button state
-                button.classList.remove('loading');
-                button.innerHTML = originalContent;
-                
-                // Re-enable all mood buttons
-                document.querySelectorAll('.mood-btn').forEach(btn => {
-                    btn.style.pointerEvents = 'auto';
-                    btn.style.opacity = '1';
-                });
+                currentRequest = null;
+                resetButtons();
+            });
+        }
+
+        function resetButtons() {
+            // Re-enable all mood buttons and restore their state
+            document.querySelectorAll('.mood-btn').forEach(btn => {
+                btn.classList.remove('loading');
+                btn.style.pointerEvents = 'auto';
+                btn.style.opacity = '1';
             });
         }
 
         function handleSearch() {
+            // Cancel previous request if exists
+            if (currentRequest) {
+                currentRequest.abort();
+            }
+
             const searchInput = document.getElementById('searchInput');
             const query = searchInput.value.trim();
-            
+        
             if (!query) {
                 showAlert('Please enter a search term', 'warning');
                 return;
@@ -1195,15 +1333,28 @@
 
             showLoading();
             clearResults();
+
+            // Create AbortController for this request
+            const controller = new AbortController();
+            currentRequest = controller;
             
+            // Set timeout for request
+            const timeoutId = setTimeout(() => {
+                controller.abort();
+                hideLoading();
+                showAlert('Search timed out. Please try again.', 'error');
+            }, 30000); // 30 second timeout
+        
             fetch('/api/search', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ query: query })
+                body: JSON.stringify({ query: query }),
+                signal: controller.signal
             })
             .then(response => {
+                clearTimeout(timeoutId);
                 if (!response.ok) {
                     return response.json().then(err => {
                         throw new Error(err.error || 'Search failed');
@@ -1220,9 +1371,12 @@
                 }
             })
             .catch(error => {
+                clearTimeout(timeoutId);
                 hideLoading();
                 console.error('Error:', error);
-                if (error.message.toLowerCase().includes('login')) {
+                if (error.name === 'AbortError') {
+                    showAlert('Search was cancelled. Please try again.', 'warning');
+                } else if (error.message.toLowerCase().includes('login')) {
                     showAlert('Please login to Spotify first', 'warning');
                     setTimeout(() => {
                         window.location.href = '/spotify-login';
@@ -1230,6 +1384,9 @@
                 } else {
                     showAlert(error.message || 'Search failed', 'error');
                 }
+            })
+            .finally(() => {
+                currentRequest = null;
             });
         }
 
