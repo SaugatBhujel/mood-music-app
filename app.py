@@ -296,12 +296,32 @@ def get_mood_recommendations():
             print("Token info is empty")
             return jsonify({'error': 'Invalid session, please login again'}), 401
 
+        print(f"Using token: {token_info['access_token'][:20]}...")
         sp = spotipy.Spotify(auth=token_info['access_token'])
         
         # Verify the token works
         try:
             user = sp.current_user()
             print(f"User verified: {user['id']}")
+            
+            # Test API with a simple search first
+            test_search = sp.search('test', limit=1, type='track')
+            print("Search API test successful")
+            
+            # Get available genres to verify API access
+            genres = sp.recommendation_genre_seeds()
+            print(f"Available genres: {genres}")
+            
+        except spotipy.exceptions.SpotifyException as e:
+            print(f"Spotify API error: {str(e)}")
+            if 'token expired' in str(e).lower():
+                print("Token expired, refreshing...")
+                token_info = get_token()
+                session['token_info'] = token_info
+                sp = spotipy.Spotify(auth=token_info['access_token'])
+            else:
+                session.pop('token_info', None)
+                return jsonify({'error': 'Spotify API error: ' + str(e)}), 401
         except Exception as e:
             print(f"Token verification failed: {str(e)}")
             session.pop('token_info', None)
@@ -315,33 +335,13 @@ def get_mood_recommendations():
         mood = data['mood'].lower()
         print(f"Getting recommendations for mood: {mood}")
 
-        # Map moods to Spotify seed genres and audio features
+        # Simplified mood settings with just one genre
         mood_settings = {
-            'happy': {
-                'seed_genres': ['pop'],
-                'target_valence': 0.8,
-                'target_energy': 0.7
-            },
-            'sad': {
-                'seed_genres': ['piano'],
-                'target_valence': 0.2,
-                'target_energy': 0.3
-            },
-            'energetic': {
-                'seed_genres': ['dance'],
-                'target_valence': 0.7,
-                'target_energy': 0.9
-            },
-            'calm': {
-                'seed_genres': ['classical'],
-                'target_valence': 0.5,
-                'target_energy': 0.2
-            },
-            'romantic': {
-                'seed_genres': ['jazz'],
-                'target_valence': 0.6,
-                'target_energy': 0.4
-            }
+            'happy': {'seed_track': '4C2WNqXjLoZe4FhOdbDSyQ'},  # Use Happy by Pharrell as seed
+            'sad': {'seed_track': '4NHQUGzhtTLFvgF5SZesLK'},   # Use Someone Like You by Adele as seed
+            'energetic': {'seed_track': '1Je1IMUlBXcx1Fz0WE7oPT'}, # Use Wannabe by Spice Girls as seed
+            'calm': {'seed_track': '3U4isOIWM3VvDubwSI3y7a'},    # Use River Flows in You by Yiruma as seed
+            'romantic': {'seed_track': '4NpFxQe2UvRCAjto3JqlSl'}  # Use At Last by Etta James as seed
         }
 
         if mood not in mood_settings:
@@ -352,11 +352,9 @@ def get_mood_recommendations():
         print(f"Using settings: {settings}")
 
         try:
-            # Get recommendations based on mood settings
+            # Get recommendations using seed tracks instead of genres
             recommendations = sp.recommendations(
-                seed_genres=[settings['seed_genres'][0]],  # Use just one genre
-                target_valence=settings['target_valence'],
-                target_energy=settings['target_energy'],
+                seed_tracks=[settings['seed_track']],
                 limit=20
             )
             
