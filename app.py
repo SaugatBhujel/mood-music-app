@@ -316,43 +316,31 @@ def get_mood_recommendations():
         print(f"Getting recommendations for mood: {mood}")
 
         # Map moods to Spotify seed genres and audio features
-        # Using only valid Spotify genres
         mood_settings = {
             'happy': {
-                'seed_genres': ['pop', 'dance'],
+                'seed_genres': ['pop'],
                 'target_valence': 0.8,
-                'target_energy': 0.7,
-                'min_valence': 0.6,
-                'min_energy': 0.5,
-                'limit': 20
+                'target_energy': 0.7
             },
             'sad': {
-                'seed_genres': ['piano', 'acoustic'],
+                'seed_genres': ['piano'],
                 'target_valence': 0.2,
-                'target_energy': 0.3,
-                'max_valence': 0.4,
-                'max_energy': 0.4,
-                'limit': 20
+                'target_energy': 0.3
             },
             'energetic': {
-                'seed_genres': ['electronic', 'dance'],
+                'seed_genres': ['dance'],
                 'target_valence': 0.7,
-                'target_energy': 0.9,
-                'min_energy': 0.7,
-                'limit': 20
+                'target_energy': 0.9
             },
             'calm': {
-                'seed_genres': ['ambient', 'classical'],
+                'seed_genres': ['classical'],
                 'target_valence': 0.5,
-                'target_energy': 0.2,
-                'max_energy': 0.4,
-                'limit': 20
+                'target_energy': 0.2
             },
             'romantic': {
-                'seed_genres': ['jazz', 'soul'],
+                'seed_genres': ['jazz'],
                 'target_valence': 0.6,
-                'target_energy': 0.4,
-                'limit': 20
+                'target_energy': 0.4
             }
         }
 
@@ -366,14 +354,10 @@ def get_mood_recommendations():
         try:
             # Get recommendations based on mood settings
             recommendations = sp.recommendations(
-                seed_genres=settings['seed_genres'][:2],  # Use only 2 genres to be safe
+                seed_genres=[settings['seed_genres'][0]],  # Use just one genre
                 target_valence=settings['target_valence'],
                 target_energy=settings['target_energy'],
-                min_valence=settings.get('min_valence', 0),
-                max_valence=settings.get('max_valence', 1),
-                min_energy=settings.get('min_energy', 0),
-                max_energy=settings.get('max_energy', 1),
-                limit=settings['limit']
+                limit=20
             )
             
             if not recommendations or 'tracks' not in recommendations:
