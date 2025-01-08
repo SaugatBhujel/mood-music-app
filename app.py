@@ -288,115 +288,110 @@ def get_recommendations():
 def get_mood_recommendations():
     try:
         if 'token_info' not in session:
-            print("No token in session")
             return jsonify({'error': 'Please login first'}), 401
 
         token_info = session['token_info']
-        if not token_info:
-            print("Token info is empty")
-            return jsonify({'error': 'Invalid session, please login again'}), 401
-
-        print(f"Using token: {token_info['access_token'][:20]}...")
         sp = spotipy.Spotify(auth=token_info['access_token'])
         
-        # Verify the token works
         try:
             user = sp.current_user()
             print(f"User verified: {user['id']}")
-            
-        except spotipy.exceptions.SpotifyException as e:
-            print(f"Spotify API error: {str(e)}")
+        except Exception as e:
             if 'token expired' in str(e).lower():
-                print("Token expired, refreshing...")
                 token_info = get_token()
                 session['token_info'] = token_info
                 sp = spotipy.Spotify(auth=token_info['access_token'])
             else:
                 session.pop('token_info', None)
-                return jsonify({'error': 'Spotify API error: ' + str(e)}), 401
-        except Exception as e:
-            print(f"Token verification failed: {str(e)}")
-            session.pop('token_info', None)
-            return jsonify({'error': 'Session expired, please login again'}), 401
+                return jsonify({'error': str(e)}), 401
 
         data = request.get_json()
         if not data or 'mood' not in data:
-            print("No mood provided in request")
             return jsonify({'error': 'No mood provided'}), 400
 
         mood = data['mood'].lower()
-        print(f"Getting recommendations for mood: {mood}")
+        print(f"Getting tracks for mood: {mood}")
 
-        # Map moods to artists
+        # Map moods to settings
         mood_settings = {
-            'happy': {'artist': 'Pharrell Williams'},
-            'sad': {'artist': 'Adele'},
-            'energetic': {'artist': 'David Guetta'},
-            'calm': {'artist': 'Ludovico Einaudi'},
-            'romantic': {'artist': 'Ed Sheeran'}
+            'happy': {
+                'seed_artists': ['06HL4z0CvFAxyc27GXpf02'],  # Taylor Swift
+                'seed_genres': ['pop', 'dance'],
+                'target_valence': 0.8,
+                'target_energy': 0.8
+            },
+            'sad': {
+                'seed_artists': ['4dpARuHxo51G3z768sgnrY'],  # Adele
+                'seed_genres': ['piano', 'acoustic'],
+                'target_valence': 0.3,
+                'target_energy': 0.3
+            },
+            'energetic': {
+                'seed_artists': ['1vCWHaC5f2uS3yhpwWbIA6'],  # Avicii
+                'seed_genres': ['edm', 'dance'],
+                'target_valence': 0.7,
+                'target_energy': 0.9
+            },
+            'calm': {
+                'seed_artists': ['2M4eNCvV3CJUswavkhAQg2'],  # Ludovico Einaudi
+                'seed_genres': ['classical', 'ambient'],
+                'target_valence': 0.5,
+                'target_energy': 0.2
+            },
+            'romantic': {
+                'seed_artists': ['6eUKZXaKkcviH0Ku9w2n3V'],  # Ed Sheeran
+                'seed_genres': ['pop', 'acoustic'],
+                'target_valence': 0.6,
+                'target_energy': 0.4
+            }
         }
 
         if mood not in mood_settings:
-            print(f"Invalid mood: {mood}")
             return jsonify({'error': 'Invalid mood'}), 400
 
         settings = mood_settings[mood]
-        print(f"Using settings: {settings}")
 
         try:
             # Get user's market
-            user_info = sp.current_user()
-            market = user_info.get('country', 'US')
-            print(f"User market: {market}")
+            market = sp.current_user()['country']
+            print(f"Using market: {market}")
 
-            # Search for the artist
-            print(f"Searching for artist: {settings['artist']}")
-            artist_results = sp.search(
-                settings['artist'],
-                type='artist',
-                market=market,
-                limit=1
-            )
-
-            if not artist_results or not artist_results['artists']['items']:
-                print("Artist search failed, using fallback artist")
-                artist_results = sp.search(
-                    'Taylor Swift',  # Fallback to a very popular artist
-                    type='artist',
+            # First try with the specified artist
+            try:
+                recommendations = sp.recommendations(
+                    seed_artists=settings['seed_artists'],
+                    seed_genres=settings['seed_genres'][:1],  # Use just one genre
+                    target_valence=settings.get('target_valence', 0.5),
+                    target_energy=settings.get('target_energy', 0.5),
+                    min_popularity=50,
                     market=market,
-                    limit=1
+                    limit=20
+                )
+            except Exception as e:
+                print(f"First attempt failed: {str(e)}")
+                # If that fails, try with just genres
+                recommendations = sp.recommendations(
+                    seed_genres=settings['seed_genres'],
+                    target_valence=settings.get('target_valence', 0.5),
+                    target_energy=settings.get('target_energy', 0.5),
+                    min_popularity=50,
+                    market=market,
+                    limit=20
                 )
 
-            if not artist_results or not artist_results['artists']['items']:
-                print("Could not find any artist")
-                return jsonify({'error': 'Could not find artist'}), 404
+            if not recommendations or 'tracks' not in recommendations or not recommendations['tracks']:
+                print("No recommendations found, falling back to search")
+                # Fallback to search if recommendations fail
+                search_results = sp.search(
+                    f"{mood} {settings['seed_genres'][0]} music",
+                    type='track',
+                    market=market,
+                    limit=20
+                )
+                if search_results and 'tracks' in search_results:
+                    recommendations = {'tracks': search_results['tracks']['items']}
 
-            artist_id = artist_results['artists']['items'][0]['id']
-            artist_name = artist_results['artists']['items'][0]['name']
-            print(f"Found artist: {artist_name} ({artist_id})")
-
-            # Get the artist's top tracks
-            print(f"Getting top tracks for artist: {artist_name}")
-            top_tracks = sp.artist_top_tracks(artist_id, country=market)
-
-            if not top_tracks or not top_tracks['tracks']:
-                print("No top tracks found")
-                return jsonify({'error': 'No tracks found'}), 404
-
-            # Use the first top track as seed
-            seed_track = top_tracks['tracks'][0]['id']
-            print(f"Using seed track: {top_tracks['tracks'][0]['name']}")
-
-            # Get recommendations
-            print("Getting recommendations...")
-            recommendations = sp.recommendations(
-                seed_artists=[artist_id],  # Use artist as seed instead of track
-                market=market,
-                limit=20
-            )
-            
-            if not recommendations or 'tracks' not in recommendations:
-                print("No recommendations found")
+            if not recommendations or 'tracks' not in recommendations or not recommendations['tracks']:
                 return jsonify({'error': 'No tracks found'}), 404
 
             tracks = []
@@ -405,47 +400,33 @@ def get_mood_recommendations():
                     track_data = {
                         'id': track['id'],
                         'name': track['name'],
-                        'artist': track['artists'][0]['name'] if track['artists'] else 'Unknown Artist',
-                        'album': track['album']['name'] if track['album'] else 'Unknown Album',
-                        'album_image': track['album']['images'][0]['url'] if track['album'].get('images') else None,
+                        'artist': track['artists'][0]['name'],
+                        'album': track['album']['name'],
+                        'album_image': track['album']['images'][0]['url'] if track['album']['images'] else None,
                         'preview_url': track['preview_url'],
-                        'external_url': track['external_urls'].get('spotify', ''),
+                        'external_url': track['external_urls']['spotify'],
                         'uri': track['uri']
                     }
                     tracks.append(track_data)
-                    print(f"Found track: {track_data['name']} by {track_data['artist']}")
                 except Exception as e:
                     print(f"Error processing track: {str(e)}")
                     continue
 
             if not tracks:
-                print("No valid tracks found")
                 return jsonify({'error': 'No valid tracks found'}), 404
 
-            print(f"Successfully found {len(tracks)} tracks")
             return jsonify({
                 'tracks': tracks,
                 'message': f'Found {len(tracks)} tracks for {mood} mood'
             })
 
-        except spotipy.exceptions.SpotifyException as e:
-            error_msg = f"Spotify API error: {str(e)}"
-            print(error_msg)
-            print(f"Status code: {getattr(e, 'http_status', 'unknown')}")
-            print(f"Error code: {getattr(e, 'code', 'unknown')}")
-            print(f"Reason: {getattr(e, 'reason', 'unknown')}")
-            return jsonify({'error': error_msg}), 500
         except Exception as e:
-            error_msg = f"Error getting recommendations: {str(e)}"
-            print(error_msg)
-            print(f"Error type: {type(e).__name__}")
-            return jsonify({'error': error_msg}), 500
+            print(f"Error: {str(e)}")
+            return jsonify({'error': str(e)}), 500
 
     except Exception as e:
-        error_msg = f"General error: {str(e)}"
-        print(error_msg)
-        print(f"Error type: {type(e).__name__}")
-        return jsonify({'error': error_msg}), 500
+        print(f"General error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/search', methods=['POST'])
 def search_tracks():
