@@ -312,37 +312,32 @@ def get_mood_recommendations():
         mood = data['mood'].lower()
         print(f"Getting tracks for mood: {mood}")
 
-        # Map moods to settings
+        # Map moods to search queries and genres
         mood_settings = {
             'happy': {
-                'seed_artists': ['06HL4z0CvFAxyc27GXpf02'],  # Taylor Swift
-                'seed_genres': ['pop', 'dance'],
-                'target_valence': 0.8,
-                'target_energy': 0.8
+                'query': 'happy upbeat',
+                'genres': ['pop', 'dance'],
+                'artists': ['Taylor Swift', 'Pharrell Williams', 'Justin Timberlake']
             },
             'sad': {
-                'seed_artists': ['4dpARuHxo51G3z768sgnrY'],  # Adele
-                'seed_genres': ['piano', 'acoustic'],
-                'target_valence': 0.3,
-                'target_energy': 0.3
+                'query': 'sad emotional',
+                'genres': ['piano', 'acoustic'],
+                'artists': ['Adele', 'Sam Smith', 'Lewis Capaldi']
             },
             'energetic': {
-                'seed_artists': ['1vCWHaC5f2uS3yhpwWbIA6'],  # Avicii
-                'seed_genres': ['edm', 'dance'],
-                'target_valence': 0.7,
-                'target_energy': 0.9
+                'query': 'party dance',
+                'genres': ['edm', 'dance'],
+                'artists': ['Avicii', 'David Guetta', 'Calvin Harris']
             },
             'calm': {
-                'seed_artists': ['2M4eNCvV3CJUswavkhAQg2'],  # Ludovico Einaudi
-                'seed_genres': ['classical', 'ambient'],
-                'target_valence': 0.5,
-                'target_energy': 0.2
+                'query': 'relaxing peaceful',
+                'genres': ['classical', 'ambient'],
+                'artists': ['Ludovico Einaudi', 'Hans Zimmer', 'Max Richter']
             },
             'romantic': {
-                'seed_artists': ['6eUKZXaKkcviH0Ku9w2n3V'],  # Ed Sheeran
-                'seed_genres': ['pop', 'acoustic'],
-                'target_valence': 0.6,
-                'target_energy': 0.4
+                'query': 'love romantic',
+                'genres': ['pop', 'acoustic'],
+                'artists': ['Ed Sheeran', 'John Legend', 'Bruno Mars']
             }
         }
 
@@ -356,46 +351,45 @@ def get_mood_recommendations():
             market = sp.current_user()['country']
             print(f"Using market: {market}")
 
-            # First try with the specified artist
-            try:
-                recommendations = sp.recommendations(
-                    seed_artists=settings['seed_artists'],
-                    seed_genres=settings['seed_genres'][:1],  # Use just one genre
-                    target_valence=settings.get('target_valence', 0.5),
-                    target_energy=settings.get('target_energy', 0.5),
-                    min_popularity=50,
-                    market=market,
-                    limit=20
-                )
-            except Exception as e:
-                print(f"First attempt failed: {str(e)}")
-                # If that fails, try with just genres
-                recommendations = sp.recommendations(
-                    seed_genres=settings['seed_genres'],
-                    target_valence=settings.get('target_valence', 0.5),
-                    target_energy=settings.get('target_energy', 0.5),
-                    min_popularity=50,
-                    market=market,
-                    limit=20
-                )
-
-            if not recommendations or 'tracks' not in recommendations or not recommendations['tracks']:
-                print("No recommendations found, falling back to search")
-                # Fallback to search if recommendations fail
-                search_results = sp.search(
-                    f"{mood} {settings['seed_genres'][0]} music",
+            all_tracks = []
+            
+            # Try searching with mood and genre
+            for genre in settings['genres']:
+                search_query = f"{settings['query']} {genre}"
+                print(f"Searching for: {search_query}")
+                
+                results = sp.search(
+                    search_query,
                     type='track',
                     market=market,
-                    limit=20
+                    limit=10
                 )
-                if search_results and 'tracks' in search_results:
-                    recommendations = {'tracks': search_results['tracks']['items']}
+                
+                if results and 'tracks' in results and results['tracks']['items']:
+                    all_tracks.extend(results['tracks']['items'])
 
-            if not recommendations or 'tracks' not in recommendations or not recommendations['tracks']:
-                return jsonify({'error': 'No tracks found'}), 404
+            # If we don't have enough tracks, try searching with artists
+            if len(all_tracks) < 20:
+                for artist in settings['artists']:
+                    search_query = f"{settings['query']} {artist}"
+                    print(f"Searching with artist: {search_query}")
+                    
+                    results = sp.search(
+                        search_query,
+                        type='track',
+                        market=market,
+                        limit=10
+                    )
+                    
+                    if results and 'tracks' in results and results['tracks']['items']:
+                        all_tracks.extend(results['tracks']['items'])
 
+            # Remove duplicates based on track ID
+            unique_tracks = {track['id']: track for track in all_tracks}.values()
+            
+            # Take only the first 20 tracks
             tracks = []
-            for track in recommendations['tracks']:
+            for track in list(unique_tracks)[:20]:
                 try:
                     track_data = {
                         'id': track['id'],
@@ -413,8 +407,9 @@ def get_mood_recommendations():
                     continue
 
             if not tracks:
-                return jsonify({'error': 'No valid tracks found'}), 404
+                return jsonify({'error': 'No tracks found'}), 404
 
+            print(f"Found {len(tracks)} tracks")
             return jsonify({
                 'tracks': tracks,
                 'message': f'Found {len(tracks)} tracks for {mood} mood'
