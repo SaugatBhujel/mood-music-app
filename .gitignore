@@ -1,5 +1,10 @@
 .env
 __pycache__/
 *.pyc
-flask_session/
 .DS_Store
+flask_session/
+.cache
+.pytest_cache/
+.coverage
+htmlcov/
+*.log
